@@ -228,6 +228,38 @@
             cursor: pointer;
         }
 
+        /* Audio source popup */
+        #sourcePopup {
+            position: fixed; bottom: 90px;
+            left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 14px;
+            padding: 12px 8px;
+            z-index: 20;
+            display: none; min-width: 220px;
+        }
+        #sourcePopup.visible { display: block; }
+        .source-item {
+            display: block; width: 100%;
+            padding: 10px 16px;
+            background: none; border: none;
+            color: rgba(255,255,255,0.8);
+            font-size: 13px; text-align: left;
+            cursor: pointer; border-radius: 8px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .source-item:hover, .source-item:active {
+            background: rgba(255,255,255,0.12);
+        }
+        .source-title {
+            padding: 4px 16px 8px;
+            color: rgba(255,255,255,0.35);
+            font-size: 10px; text-transform: uppercase;
+            letter-spacing: 1.5px; font-weight: 600;
+        }
+
         /* Mode buttons (shared style for view + viz modes) */
         .view-btn, .viz-btn {
             padding: 6px 14px;
@@ -340,11 +372,12 @@
     <div class="ctrl-group">
         <div class="gain-wrap">
             <span class="gain-label">Gain</span>
-            <input type="range" class="gain-slider" id="gainSlider" min="1" max="12" step="0.1" value="5.0">
+            <input type="range" class="gain-slider" id="gainSlider" min="1" max="8" step="0.1" value="3.0">
         </div>
     </div>
 </div>
 
+<div id="sourcePopup"><div class="source-title">Select Audio Source</div></div>
 <input type="file" id="fileInput" accept="audio/*" hidden>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -486,7 +519,7 @@ let activeVizUpdate = null;
         for(let i=0;i<N;i++){const s=data[i];
             const amp=Math.max(bv[s.bi]-s.th,0)*s.sn;
             const amb=0.006*(Math.sin(t*s.sp+s.ph)*0.5+0.5);
-            const tgt=amp*0.5+amb;
+            const tgt=Math.min(amp*0.5+amb, 0.45);
             s.h+=(tgt-s.h)*(tgt>s.h?0.3:0.08);
             _quat.setFromUnitVectors(_yUp,s.dir);
             if(s.h<0.002){_scl.set(0,0,0);_pos.set(0,0,0);}
@@ -520,7 +553,7 @@ let activeVizUpdate = null;
             const lat=(Math.asin(ny)+Math.PI/2)/Math.PI;
             const bVal=bands[bk[Math.min(Math.floor(lat*5),4)]];
             const n=fbm3(nx*2+t*0.15,ny*2+t*0.12,nz*2+t*0.1);
-            const d=0.4+n*0.08+bVal*0.25+en*0.05;
+            const d=Math.min(0.4+n*0.08+bVal*0.25+en*0.05, 0.85);
             pa.setXYZ(i,nx*d,ny*d,nz*d);}
         pa.needsUpdate=true; geo.computeVertexNormals();
         grp.rotation.y+=0.001+Math.min(en,0.4)*0.003;
@@ -541,7 +574,7 @@ let activeVizUpdate = null;
         for(let i=0;i<N;i++){const b=bd[i];
             const bin=Math.floor(i/N*(freqData?freqData.length:128));
             const raw=freqData?freqData[bin]/255*gain:0;
-            const tgt=Math.min(raw,1.5)*0.8;
+            const tgt=Math.min(raw*0.8, 0.7);
             b.h+=(tgt-b.h)*(tgt>b.h?0.35:0.1);
             _pos.set(Math.cos(b.a)*RR,0,Math.sin(b.a)*RR);
             _quat.setFromAxisAngle(_yUp,-b.a+Math.PI/2);
@@ -570,7 +603,7 @@ let activeVizUpdate = null;
             const si=((ang+Math.PI)/(Math.PI*2))*(freqData?freqData.length:128);
             const bin=Math.floor(si)%(freqData?freqData.length:128);
             const raw=freqData?freqData[bin]/255*gain:0;
-            pa.setZ(i,Math.min(raw,1.5)*0.3);}
+            pa.setZ(i,Math.min(raw*0.3, 0.35));}
         pa.needsUpdate=true; geo.computeVertexNormals();
         grp.rotation.z+=0.0008;
         grp.rotation.x=0.4+Math.sin(t*0.1)*0.05;
@@ -593,7 +626,7 @@ let activeVizUpdate = null;
         const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
         for(let i=0;i<PS;i++){const p=i/PS;
             const bVal=bands[bk[Math.min(Math.floor(p*5),4)]];
-            const d=hd[i]; d.h+=(0.015+bVal*0.025-d.h)*0.15;
+            const d=hd[i]; d.h+=(Math.min(0.015+bVal*0.025,0.05)-d.h)*0.15;
             const ang=p*TU*Math.PI*2+t*0.3;
             const y=(p-0.5)*HH, hr=HR+bVal*0.12;
             _pos.set(Math.cos(ang)*hr,y,Math.sin(ang)*hr);
@@ -808,7 +841,7 @@ let micSource = null;
 let audioEl = null;
 let audioSource = null;
 let audioState = 'idle'; // idle | mic | playing | paused
-let gain = 5.0;
+let gain = 3.0;
 
 // Smoothed band values
 const bands = { bass: 0, lowMid: 0, mid: 0, highMid: 0, high: 0 };
@@ -825,35 +858,76 @@ function initAudio() {
     return audioCtx;
 }
 
-async function startMic() {
-    // Check secure context (mic requires HTTPS or localhost)
+async function showSourceSelector() {
     if (!window.isSecureContext) {
         document.getElementById('warning').style.display = 'block';
         return;
     }
+    // If mic is active, stop it
+    if (audioState === 'mic') { stopMic(); return; }
+
+    try {
+        // Request permission first (needed to enumerate devices)
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+        const popup = document.getElementById('sourcePopup');
+        // Clear old items (keep title)
+        popup.querySelectorAll('.source-item').forEach(el => el.remove());
+
+        audioInputs.forEach(dev => {
+            const btn = document.createElement('button');
+            btn.className = 'source-item';
+            btn.textContent = dev.label || `Microphone ${audioInputs.indexOf(dev)+1}`;
+            btn.addEventListener('click', () => {
+                popup.classList.remove('visible');
+                startMicWithDevice(dev.deviceId);
+            });
+            popup.appendChild(btn);
+        });
+
+        if (audioInputs.length === 0) {
+            const msg = document.createElement('div');
+            msg.className = 'source-item';
+            msg.textContent = 'No audio inputs found';
+            popup.appendChild(msg);
+        }
+
+        popup.classList.toggle('visible');
+    } catch (e) {
+        console.warn('Cannot enumerate devices:', e);
+        // Fallback: just start with default mic
+        startMicWithDevice(null);
+    }
+}
+
+async function startMicWithDevice(deviceId) {
     try {
         initAudio();
         if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-        // Stop file playback if active
         stopFile();
+        stopMic();
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraints = {
             audio: {
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false
             }
-        });
+        };
+        if (deviceId) constraints.audio.deviceId = { exact: deviceId };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         micStream = stream;
         micSource = audioCtx.createMediaStreamSource(stream);
         micSource.connect(analyser);
-        // Do NOT connect analyser to destination (avoid feedback)
 
         audioState = 'mic';
         document.getElementById('micBtn').classList.add('active');
         document.getElementById('micLabel').textContent = 'Mic On';
-        document.getElementById('status').textContent = 'Listening...';
+        const track = stream.getAudioTracks()[0];
+        document.getElementById('status').textContent = track.label || 'Listening...';
         document.getElementById('levelMeter').classList.add('visible');
     } catch (e) {
         console.warn('Mic access denied:', e);
@@ -992,8 +1066,15 @@ function updateAudioData() {
 
 // ---- UI EVENT HANDLERS ----
 document.getElementById('micBtn').addEventListener('click', () => {
-    if (audioState === 'mic') stopMic();
-    else startMic();
+    showSourceSelector();
+});
+// Close popup when clicking elsewhere
+document.addEventListener('click', e => {
+    const popup = document.getElementById('sourcePopup');
+    const micBtn = document.getElementById('micBtn');
+    if (!popup.contains(e.target) && !micBtn.contains(e.target)) {
+        popup.classList.remove('visible');
+    }
 });
 
 document.getElementById('fileBtn').addEventListener('click', () => {
