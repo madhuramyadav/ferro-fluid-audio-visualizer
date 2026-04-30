@@ -1173,16 +1173,19 @@ document.getElementById('gainSlider').addEventListener('input', e => {
 
 // ---- VIEW MODES ----
 const VIEW_MODES = {
-    free:      { frame: false, glow: false, label: 'Free' },
-    display:   { frame: true,  glow: true,  label: 'Display' },
-    spotlight: { frame: false, glow: true,  label: 'Spotlight' }
+    free:      { frame: false, glow: false, scale: 1.0, label: 'Free' },
+    display:   { frame: true,  glow: true,  scale: 0.5, label: 'Display' },
+    spotlight: { frame: false, glow: true,  scale: 0.8, label: 'Spotlight' }
 };
 let currentView = 'free';
+let viewScale = 1.0;
+let targetViewScale = 1.0;
 
 function setView(mode) {
     const v = VIEW_MODES[mode];
     if (!v) return;
     currentView = mode;
+    targetViewScale = v.scale;
     // Frame mask
     document.getElementById('frame').classList.toggle('active', v.frame);
     // Glow
@@ -1219,6 +1222,11 @@ function animate() {
 
     // Update active visualization mode
     if (activeVizUpdate) activeVizUpdate(t, bands);
+
+    // Smooth view scale transition (Display mode shrinks viz to fit circle)
+    viewScale += (targetViewScale - viewScale) * 0.08;
+    const vizMeshes = VIZ[currentVizMode] ? VIZ[currentVizMode].meshes : [];
+    vizMeshes.forEach(m => { if (m.visible) m.scale.setScalar(viewScale); });
 
     // Smooth theme transitions (background + active mode materials)
     currentBg.lerp(targetBg, 0.04);
