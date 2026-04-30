@@ -1216,6 +1216,23 @@ let audioSource = null;
 let audioState = 'idle'; // idle | mic | playing | paused
 let gain = 3.0;
 
+// Wake Lock — keeps tablet screen on during visualization
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* user denied or not supported */ }
+}
+function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+// Re-acquire wake lock when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && audioState !== 'idle') requestWakeLock();
+});
+
 // Smoothed band values
 const bands = { bass: 0, lowMid: 0, mid: 0, highMid: 0, high: 0 };
 
@@ -1360,6 +1377,7 @@ async function startMicWithDevice(deviceId) {
         micSource.connect(analyser);
 
         audioState = 'mic';
+        requestWakeLock();
         document.getElementById('micBtn').classList.add('active');
         document.getElementById('micLabel').textContent = 'Mic On';
         const track = stream.getAudioTracks()[0];
@@ -1380,6 +1398,7 @@ function stopMic() {
     document.getElementById('levelMeter').classList.remove('visible');
     if (audioState === 'mic') {
         audioState = 'idle';
+        releaseWakeLock();
         document.getElementById('status').textContent = '';
     }
 }
@@ -1399,6 +1418,7 @@ function loadFile(file) {
 
     audioEl.play();
     audioState = 'playing';
+    requestWakeLock();
 
     const name = file.name.replace(/\.[^.]+$/, '');
     document.getElementById('fileName').textContent = name;
@@ -1427,6 +1447,7 @@ function stopFile() {
     showPlayPause(false);
     if (audioState === 'playing' || audioState === 'paused') {
         audioState = 'idle';
+        releaseWakeLock();
         document.getElementById('status').textContent = '';
     }
 }
