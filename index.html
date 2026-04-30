@@ -400,254 +400,6 @@ const THEMES = {
 
 let currentTheme = 'ferrofluid';
 
-// ---- GLSL: VERTEX SHADER ----
-const vertexShader = /* glsl */`
-uniform float uTime;
-uniform float uBass;
-uniform float uLowMid;
-uniform float uMid;
-uniform float uHighMid;
-uniform float uHigh;
-
-varying vec3 vNormal;
-varying vec3 vViewPos;
-varying float vDisp;
-
-// ---- Simplex 3D noise (Ashima Arts / Stefan Gustavson) ----
-vec4 permute(vec4 x){ return mod(((x*34.0)+1.0)*x, 289.0); }
-vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314*r; }
-
-float snoise(vec3 v){
-    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-
-    vec3 i  = floor(v + dot(v, C.yyy));
-    vec3 x0 = v - i + dot(i, C.xxx);
-
-    vec3 g = step(x0.yzx, x0.xyz);
-    vec3 l = 1.0 - g;
-    vec3 i1 = min(g, l.zxy);
-    vec3 i2 = max(g, l.zxy);
-
-    vec3 x1 = x0 - i1 + C.xxx;
-    vec3 x2 = x0 - i2 + C.yyy;
-    vec3 x3 = x0 - D.yyy;
-
-    i = mod(i, 289.0);
-    vec4 p = permute(permute(permute(
-        i.z + vec4(0.0, i1.z, i2.z, 1.0))
-      + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-      + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-    float n_ = 1.0/7.0;
-    vec3 ns = n_ * D.wyz - D.xzx;
-
-    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-    vec4 xp = floor(j * ns.z);
-    vec4 yp = floor(j - 7.0 * xp);
-
-    vec4 x4 = xp * ns.x + ns.yyyy;
-    vec4 y4 = yp * ns.x + ns.yyyy;
-    vec4 h  = 1.0 - abs(x4) - abs(y4);
-
-    vec4 b0 = vec4(x4.xy, y4.xy);
-    vec4 b1 = vec4(x4.zw, y4.zw);
-
-    vec4 s0 = floor(b0)*2.0 + 1.0;
-    vec4 s1 = floor(b1)*2.0 + 1.0;
-    vec4 sh = -step(h, vec4(0.0));
-
-    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-
-    vec3 p0 = vec3(a0.xy, h.x);
-    vec3 p1 = vec3(a0.zw, h.y);
-    vec3 p2 = vec3(a1.xy, h.z);
-    vec3 p3 = vec3(a1.zw, h.w);
-
-    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-
-    vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
-    m = m*m;
-    return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}
-
-// Compute displacement at a point (reusable for normal estimation)
-float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, float highMid, float high) {
-    float energy = bass + lowMid + mid + highMid + high;
-
-    // Use UNIT SPHERE direction so noise is scale-independent.
-    // Without this, noise barely varies on tiny r=0.12 sphere.
-    vec3 np = normalize(pos);
-
-    // Rotate noise space — slow organic drift
-    float ra = t * 0.04 + energy * 0.06;
-    float rc = cos(ra), rs = sin(ra);
-    vec3 rp = vec3(np.x*rc - np.z*rs, np.y, np.x*rs + np.z*rc);
-
-    // Nearly perfect sphere at rest
-    float d = snoise(rp * 3.0 + t * 0.02) * 0.0005;
-
-    // === THIN SPIKE LAYERS ===
-    // Many layers at high frequencies for dense spider-like spikes.
-    // All time speeds SLOW for organic feel.
-
-    // Large primary spikes (bass) — tallest legs
-    float s1 = pow(max(snoise(rp * 7.0 + t * 0.02 + 10.0), 0.0), 4.0);
-    d += s1 * bass * 0.22;
-
-    // Secondary spikes (bass+low-mid)
-    float s2 = pow(max(snoise(rp * 10.0 + t * 0.025 + 20.0), 0.0), 4.0);
-    d += s2 * lowMid * 0.18;
-
-    // Dense thin spikes (mid) — many legs
-    float s3 = pow(max(snoise(rp * 13.0 + t * 0.03 + 30.0), 0.0), 5.0);
-    d += s3 * mid * 0.16;
-
-    // More mid spikes — fills in gaps
-    float s4 = pow(max(snoise(rp * 16.0 + t * 0.028 + 70.0), 0.0), 5.0);
-    d += s4 * mid * 0.10;
-
-    // Thin thorns (high-mid)
-    float s5 = pow(max(snoise(rp * 20.0 + t * 0.035 + 40.0), 0.0), 5.0);
-    d += s5 * highMid * 0.13;
-
-    // Extra thorn layer
-    float s6 = pow(max(snoise(rp * 24.0 + t * 0.032 + 90.0), 0.0), 6.0);
-    d += s6 * highMid * 0.08;
-
-    // Fine needles (highs)
-    float s7 = pow(max(snoise(rp * 30.0 + t * 0.04 + 50.0), 0.0), 6.0);
-    d += s7 * high * 0.10;
-
-    // More needles
-    float s8 = pow(max(snoise(rp * 36.0 + t * 0.038 + 80.0), 0.0), 7.0);
-    d += s8 * high * 0.06;
-
-    // Ultra-fine splinters
-    float s9 = pow(max(snoise(rp * 44.0 + t * 0.045 + 60.0), 0.0), 7.0);
-    d += s9 * high * 0.04;
-
-    return d;
-}
-
-void main(){
-    vec3 pos = position;
-    vec3 nrm = normal;
-    float t  = uTime;
-
-    float disp = getDisplacement(pos, t, uBass, uLowMid, uMid, uHighMid, uHigh);
-
-    // Separation: spikes detach from core when loud, snap back when quiet
-    float energy = uBass + uLowMid + uMid + uHighMid + uHigh;
-    float liftFactor = smoothstep(0.001, 0.01, disp);
-    float separation = liftFactor * min(energy, 2.0) * 0.06;
-    disp += separation;
-
-    vec3 displaced = pos + nrm * disp;
-
-    // Estimate normal by sampling displacement at offset points
-    float eps = 0.004;
-    vec3 tangent = normalize(cross(nrm, nrm.yzx + vec3(0.1, 0.2, 0.3)));
-    vec3 bitangent = normalize(cross(nrm, tangent));
-    vec3 posT = pos + tangent * eps;
-    vec3 posB = pos + bitangent * eps;
-    float dispT = getDisplacement(posT, t, uBass, uLowMid, uMid, uHighMid, uHigh);
-    float dispB = getDisplacement(posB, t, uBass, uLowMid, uMid, uHighMid, uHigh);
-    vec3 surfT = posT + normalize(posT) * dispT;
-    vec3 surfB = posB + normalize(posB) * dispB;
-    vec3 detailNormal = normalize(cross(surfT - displaced, surfB - displaced));
-
-    // Blend smooth vertex normal with detail normal for wet metallic look
-    vec3 smoothN = nrm;
-    vec3 blendedNormal = normalize(mix(smoothN, detailNormal, 0.75));
-
-    vec4 mvPos = modelViewMatrix * vec4(displaced, 1.0);
-    vViewPos = mvPos.xyz;
-    vNormal = normalize(normalMatrix * blendedNormal);
-    vDisp = disp;
-
-    gl_Position = projectionMatrix * mvPos;
-}
-`;
-
-// ---- GLSL: FRAGMENT SHADER ----
-const fragmentShader = /* glsl */`
-uniform vec3 uLiquidColor;
-uniform vec3 uSpecularColor;
-uniform float uIri;
-
-varying vec3 vNormal;
-varying vec3 vViewPos;
-varying float vDisp;
-
-void main(){
-    vec3 N = normalize(vNormal);
-    vec3 V = normalize(-vViewPos);
-
-    // Fresnel (metallic wet look)
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0);
-
-    // --- Multi-light setup ---
-    // Key light (upper-right-front)
-    vec3 L1 = normalize(vec3(1.0, 1.2, 0.8));
-    float diff1 = max(dot(N, L1), 0.0);
-    float spec1 = pow(max(dot(N, normalize(L1 + V)), 0.0), 120.0);
-
-    // Fill light (upper-left)
-    vec3 L2 = normalize(vec3(-0.8, 0.9, 0.5));
-    float diff2 = max(dot(N, L2), 0.0) * 0.35;
-    float spec2 = pow(max(dot(N, normalize(L2 + V)), 0.0), 80.0) * 0.5;
-
-    // Top light (studio ferrofluid look)
-    vec3 L3 = normalize(vec3(0.0, 1.0, 0.2));
-    float diff3 = max(dot(N, L3), 0.0) * 0.3;
-    float spec3 = pow(max(dot(N, normalize(L3 + V)), 0.0), 160.0) * 0.7;
-
-    // Rim / back light
-    vec3 L4 = normalize(vec3(0.0, 0.3, -1.0));
-    float rim = pow(max(dot(N, L4), 0.0), 2.0) * 0.3;
-
-    // Environment reflection approx
-    vec3 R = reflect(-V, N);
-    float envGrad = R.y * 0.5 + 0.5;
-    vec3 envCol = mix(uLiquidColor * 0.5, uSpecularColor * 0.15, envGrad);
-
-    // Iridescence
-    float iriPhase = vDisp * 10.0 + dot(N, V) * 4.0;
-    vec3 iri = vec3(
-        0.5 + 0.5 * sin(iriPhase * 6.2832),
-        0.5 + 0.5 * sin(iriPhase * 6.2832 + 2.094),
-        0.5 + 0.5 * sin(iriPhase * 6.2832 + 4.189)
-    );
-
-    // Combine
-    float ambient = 0.06;
-    float diffuse = diff1 + diff2 + diff3;
-    vec3 color = uLiquidColor * (ambient + diffuse * 0.4);
-
-    // Specular highlights (sharp, bright)
-    color += uSpecularColor * (spec1 * 0.7 + spec2 * 0.35 + spec3 * 0.5);
-
-    // Fresnel edge glow
-    color += fresnel * mix(uSpecularColor * 0.6, iri * uIri, uIri) * 0.5;
-
-    // Environment + rim
-    color += envCol * fresnel * 0.3;
-    color += uSpecularColor * rim * fresnel * 0.6;
-
-    // Spike tip highlight
-    color += uSpecularColor * smoothstep(0.15, 0.5, vDisp) * 0.12;
-
-    // Reinhard tone-map + gamma
-    color = color / (1.0 + color);
-    color = pow(color, vec3(1.0 / 2.2));
-
-    gl_FragColor = vec4(color, 1.0);
-}
-`;
-
 // ---- THREE.JS SETUP ----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -661,30 +413,111 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
-// ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(0.05, 7);
+// ---- LIGHTS ----
+scene.add(new THREE.AmbientLight(0x404040));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+keyLight.position.set(3, 4, 2);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x6688cc, 0.4);
+fillLight.position.set(-2, 1, -3);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+rimLight.position.set(0, -1, -2);
+scene.add(rimLight);
 
-const uniforms = {
-    uTime:      { value: 0 },
-    uBass:      { value: 0 },
-    uLowMid:    { value: 0 },
-    uMid:       { value: 0 },
-    uHighMid:   { value: 0 },
-    uHigh:      { value: 0 },
-    uLiquidColor:  { value: new THREE.Color() },
-    uSpecularColor:{ value: new THREE.Color() },
-    uIri:       { value: 0.2 }
-};
-
-const mat = new THREE.ShaderMaterial({
-    vertexShader,
-    fragmentShader,
-    uniforms,
-    extensions: { derivatives: true }
+// ---- CORE SPHERE (tiny metallic ball) ----
+const CORE_RADIUS = 0.025;
+const coreGeo = new THREE.SphereGeometry(CORE_RADIUS, 32, 32);
+const coreMat = new THREE.MeshPhongMaterial({
+    color: 0x080810,
+    specular: 0x999aaa,
+    shininess: 200
 });
+const core = new THREE.Mesh(coreGeo, coreMat);
 
-const blob = new THREE.Mesh(geo, mat);
-scene.add(blob);
+// ---- SPIKE SYSTEM (instanced thin cones) ----
+const SPIKE_COUNT = 256;
+const spikeGeo = new THREE.ConeGeometry(1, 1, 5);
+spikeGeo.translate(0, 0.5, 0); // base at origin, tip at y=1
+
+const spikeMat = new THREE.MeshPhongMaterial({
+    color: 0x080810,
+    specular: 0x999aaa,
+    shininess: 180
+});
+const spikeMesh = new THREE.InstancedMesh(spikeGeo, spikeMat, SPIKE_COUNT);
+
+// Pre-compute spike directions (Fibonacci sphere for even distribution)
+const spikeData = [];
+const golden = Math.PI * (1 + Math.sqrt(5));
+const yUp = new THREE.Vector3(0, 1, 0);
+
+for (let i = 0; i < SPIKE_COUNT; i++) {
+    const y = 1 - (i / (SPIKE_COUNT - 1)) * 2;
+    const r = Math.sqrt(1 - y * y);
+    const theta = golden * i;
+    const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+
+    spikeData.push({
+        dir,
+        bandIndex: Math.floor(Math.random() * 5),
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.3 + Math.random() * 0.7,
+        sensitivity: 0.6 + Math.random() * 0.8,
+        baseHeight: 0.005 + Math.random() * 0.01,
+        thickness: 0.0015 + Math.random() * 0.002
+    });
+}
+
+// Group so we can rotate core + spikes together
+const organism = new THREE.Group();
+organism.add(core);
+organism.add(spikeMesh);
+scene.add(organism);
+
+// Reusable objects for spike matrix updates
+const _mat4 = new THREE.Matrix4();
+const _quat = new THREE.Quaternion();
+const _pos = new THREE.Vector3();
+const _scl = new THREE.Vector3();
+
+function updateSpikes(t, bands) {
+    const bandValues = [bands.bass, bands.lowMid, bands.mid, bands.highMid, bands.high];
+    const energy = (bands.bass + bands.lowMid + bands.mid + bands.highMid + bands.high) / 5;
+
+    for (let i = 0; i < SPIKE_COUNT; i++) {
+        const s = spikeData[i];
+
+        // Audio amplitude for this spike's frequency band
+        const amp = bandValues[s.bandIndex] * s.sensitivity;
+
+        // Slow organic pulse (always alive)
+        const pulse = Math.sin(t * s.speed * 0.4 + s.phase) * 0.5 + 0.5;
+
+        // Spike height: ambient breathing + audio-reactive
+        const height = s.baseHeight * (0.3 + pulse * 0.7) + amp * 0.35;
+
+        // Thickness: slightly thicker with more audio
+        const thick = s.thickness * (1 + amp * 0.5);
+
+        // Separation: gap between core and spike base when loud
+        const gap = Math.min(energy, 0.6) * 0.06;
+        const startRadius = CORE_RADIUS + gap;
+
+        // Position spike at surface + gap
+        _pos.copy(s.dir).multiplyScalar(startRadius);
+
+        // Orient cone to point outward along spike direction
+        _quat.setFromUnitVectors(yUp, s.dir);
+
+        // Scale: x/z = thickness, y = height
+        _scl.set(thick, Math.max(height, 0.001), thick);
+
+        _mat4.compose(_pos, _quat, _scl);
+        spikeMesh.setMatrixAt(i, _mat4);
+    }
+    spikeMesh.instanceMatrix.needsUpdate = true;
+}
 
 // ---- GLOW DISC (backlight behind blob) ----
 function createGlowTexture() {
@@ -850,9 +683,10 @@ let targetIri = 0.2;
 // Initialize theme
 setTheme(currentTheme);
 currentBg.copy(targetBg);
-uniforms.uLiquidColor.value.copy(targetLiquid);
-uniforms.uSpecularColor.value.copy(targetSpec);
-uniforms.uIri.value = targetIri;
+coreMat.color.copy(targetLiquid);
+coreMat.specular.copy(targetSpec);
+spikeMat.color.copy(targetLiquid);
+spikeMat.specular.copy(targetSpec);
 glowMat.color.copy(targetGlow);
 
 // ---- AUDIO ENGINE ----
@@ -1114,20 +948,16 @@ function animate() {
     // Update audio
     updateAudioData();
 
-    // Update uniforms
-    uniforms.uTime.value = t;
-    uniforms.uBass.value    = bands.bass;
-    uniforms.uLowMid.value  = bands.lowMid;
-    uniforms.uMid.value     = bands.mid;
-    uniforms.uHighMid.value = bands.highMid;
-    uniforms.uHigh.value    = bands.high;
+    // Update spikes
+    updateSpikes(t, bands);
 
     // Smooth theme transitions
     currentBg.lerp(targetBg, 0.04);
     renderer.setClearColor(currentBg);
-    uniforms.uLiquidColor.value.lerp(targetLiquid, 0.04);
-    uniforms.uSpecularColor.value.lerp(targetSpec, 0.04);
-    uniforms.uIri.value += (targetIri - uniforms.uIri.value) * 0.04;
+    coreMat.color.lerp(targetLiquid, 0.04);
+    coreMat.specular.lerp(targetSpec, 0.04);
+    spikeMat.color.lerp(targetLiquid, 0.04);
+    spikeMat.specular.lerp(targetSpec, 0.04);
 
     // Total energy for reactive effects
     const totalEnergy = (bands.bass + bands.lowMid + bands.mid + bands.highMid + bands.high) / 5;
@@ -1140,15 +970,11 @@ function animate() {
         glowSprite.scale.set(glowScale, glowScale, 1);
     }
 
-    // ---- BLOB ORGANISM MOTION ----
-    // Very slow organic spin
+    // ---- ORGANISM MOTION ----
     const cappedEnergy = Math.min(totalEnergy, 0.5);
-    blob.rotation.y += 0.001 + cappedEnergy * 0.006;
-    // Gentle tilt/sway
-    blob.rotation.x = Math.sin(t * 0.15) * 0.03 + Math.min(bands.bass - bands.high, 0.2) * 0.08;
-    blob.rotation.z = Math.cos(t * 0.12) * 0.02 + Math.min(bands.lowMid - bands.highMid, 0.2) * 0.05;
-    // Gentle bobbing
-    blob.position.y = Math.sin(t * 0.5) * 0.04;
+    organism.rotation.y += 0.0008 + cappedEnergy * 0.004;
+    organism.rotation.x = Math.sin(t * 0.12) * 0.02;
+    organism.rotation.z = Math.cos(t * 0.1) * 0.015;
 
     // Update orbit camera
     orbit.update();
