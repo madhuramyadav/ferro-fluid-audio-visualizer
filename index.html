@@ -356,6 +356,7 @@ uniform float uMid;
 uniform float uHighMid;
 uniform float uHigh;
 
+varying vec3 vNormal;
 varying vec3 vViewPos;
 varying float vDisp;
 
@@ -419,47 +420,65 @@ float snoise(vec3 v){
     return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
 
+// Compute displacement at a point (reusable for normal estimation)
+float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, float highMid, float high) {
+    // Ambient: subtle breathing (nearly spherical at rest)
+    float d = snoise(pos * 1.5 + t * 0.1) * 0.015;
+
+    // Bass: large organic swells
+    float bn = snoise(pos * 0.8 + t * 0.12 + 10.0);
+    d += max(bn, 0.0) * bass * 0.6;
+
+    // Low-mid: medium bumps
+    float lmn = snoise(pos * 2.0 + t * 0.18 + 20.0);
+    d += max(lmn - 0.05, 0.0) * lowMid * 0.5;
+
+    // Mid: spiky protrusions
+    float mn = snoise(pos * 3.5 + t * 0.25 + 30.0);
+    float midD = max(mn - 0.1, 0.0);
+    d += pow(midD, 1.8) * mid * 0.7;
+
+    // High-mid: sharp spikes
+    float hmn = snoise(pos * 6.0 + t * 0.32 + 40.0);
+    float hmD = max(hmn - 0.15, 0.0);
+    d += pow(hmD, 2.2) * highMid * 0.5;
+
+    // Highs: fine needles
+    float hn = snoise(pos * 10.0 + t * 0.45 + 50.0);
+    float hD = max(hn - 0.2, 0.0);
+    d += pow(hD, 3.0) * high * 0.4;
+
+    return d;
+}
+
 void main(){
-    vec3 pos  = position;
-    vec3 nrm  = normal;
-    float t   = uTime;
+    vec3 pos = position;
+    vec3 nrm = normal;
+    float t  = uTime;
 
-    // --- Ambient organic movement (always on) ---
-    float amb1 = snoise(pos * 1.2 + t * 0.12) * 0.055;
-    float amb2 = snoise(pos * 2.5 + t * 0.09 + 5.0) * 0.025;
+    float disp = getDisplacement(pos, t, uBass, uLowMid, uMid, uHighMid, uHigh);
 
-    // --- Bass: large slow undulations ---
-    float bn = snoise(pos * 0.7 + t * 0.14 + 10.0);
-    float bassD = max(bn, 0.0) * uBass * 0.55;
+    // Sub-bass pulse
+    float pulse = 1.0 + uBass * 0.06;
 
-    // --- Low-mid: medium bumps ---
-    float lmn = snoise(pos * 1.8 + t * 0.2 + 20.0);
-    float lowMidD = max(lmn - 0.1, 0.0) * uLowMid * 0.45;
+    vec3 displaced = pos * pulse + nrm * disp;
 
-    // --- Mid: spiky protrusions ---
-    float mn = snoise(pos * 3.2 + t * 0.28 + 30.0);
-    float midD = max(mn - 0.12, 0.0);
-    midD = pow(midD, 1.6) * uMid * 0.65;
-
-    // --- High-mid: sharp spikes ---
-    float hmn = snoise(pos * 5.5 + t * 0.35 + 40.0);
-    float highMidD = max(hmn - 0.2, 0.0);
-    highMidD = pow(highMidD, 2.0) * uHighMid * 0.45;
-
-    // --- Highs: fine needles ---
-    float hn = snoise(pos * 9.0 + t * 0.5 + 50.0);
-    float highD = max(hn - 0.25, 0.0);
-    highD = pow(highD, 2.5) * uHigh * 0.35;
-
-    // Sub-bass overall scale pulse
-    float pulse = 1.0 + uBass * 0.1;
-
-    float totalD = amb1 + amb2 + bassD + lowMidD + midD + highMidD + highD;
-    vec3 displaced = pos * pulse + nrm * totalD;
+    // Estimate normal by sampling displacement at offset points
+    float eps = 0.005;
+    vec3 tangent = normalize(cross(nrm, nrm.yzx + vec3(0.1, 0.2, 0.3)));
+    vec3 bitangent = normalize(cross(nrm, tangent));
+    vec3 posT = pos + tangent * eps;
+    vec3 posB = pos + bitangent * eps;
+    float dispT = getDisplacement(posT, t, uBass, uLowMid, uMid, uHighMid, uHigh);
+    float dispB = getDisplacement(posB, t, uBass, uLowMid, uMid, uHighMid, uHigh);
+    vec3 surfT = posT * pulse + normalize(posT) * dispT;
+    vec3 surfB = posB * pulse + normalize(posB) * dispB;
+    vec3 displacedNormal = normalize(cross(surfT - displaced, surfB - displaced));
 
     vec4 mvPos = modelViewMatrix * vec4(displaced, 1.0);
     vViewPos = mvPos.xyz;
-    vDisp = totalD;
+    vNormal = normalize(normalMatrix * displacedNormal);
+    vDisp = disp;
 
     gl_Position = projectionMatrix * mvPos;
 }
@@ -471,15 +490,12 @@ uniform vec3 uLiquidColor;
 uniform vec3 uSpecularColor;
 uniform float uIri;
 
+varying vec3 vNormal;
 varying vec3 vViewPos;
 varying float vDisp;
 
 void main(){
-    // Screen-space normal from displaced surface
-    vec3 fdx = dFdx(vViewPos);
-    vec3 fdy = dFdy(vViewPos);
-    vec3 N = normalize(cross(fdx, fdy));
-
+    vec3 N = normalize(vNormal);
     vec3 V = normalize(-vViewPos);
 
     // Fresnel (metallic wet look)
@@ -489,29 +505,29 @@ void main(){
     // Key light (upper-right-front)
     vec3 L1 = normalize(vec3(1.0, 1.2, 0.8));
     float diff1 = max(dot(N, L1), 0.0);
-    float spec1 = pow(max(dot(N, normalize(L1 + V)), 0.0), 90.0);
+    float spec1 = pow(max(dot(N, normalize(L1 + V)), 0.0), 120.0);
 
     // Fill light (upper-left)
     vec3 L2 = normalize(vec3(-0.8, 0.9, 0.5));
     float diff2 = max(dot(N, L2), 0.0) * 0.35;
-    float spec2 = pow(max(dot(N, normalize(L2 + V)), 0.0), 64.0) * 0.45;
+    float spec2 = pow(max(dot(N, normalize(L2 + V)), 0.0), 80.0) * 0.5;
 
     // Top light (studio ferrofluid look)
     vec3 L3 = normalize(vec3(0.0, 1.0, 0.2));
-    float diff3 = max(dot(N, L3), 0.0) * 0.25;
-    float spec3 = pow(max(dot(N, normalize(L3 + V)), 0.0), 120.0) * 0.6;
+    float diff3 = max(dot(N, L3), 0.0) * 0.3;
+    float spec3 = pow(max(dot(N, normalize(L3 + V)), 0.0), 160.0) * 0.7;
 
     // Rim / back light
     vec3 L4 = normalize(vec3(0.0, 0.3, -1.0));
-    float rim = pow(max(dot(N, L4), 0.0), 2.0) * 0.25;
+    float rim = pow(max(dot(N, L4), 0.0), 2.0) * 0.3;
 
     // Environment reflection approx
     vec3 R = reflect(-V, N);
     float envGrad = R.y * 0.5 + 0.5;
-    vec3 envCol = mix(uLiquidColor * 0.4, uSpecularColor * 0.12, envGrad);
+    vec3 envCol = mix(uLiquidColor * 0.5, uSpecularColor * 0.15, envGrad);
 
     // Iridescence
-    float iriPhase = vDisp * 8.0 + dot(N, V) * 3.0;
+    float iriPhase = vDisp * 10.0 + dot(N, V) * 4.0;
     vec3 iri = vec3(
         0.5 + 0.5 * sin(iriPhase * 6.2832),
         0.5 + 0.5 * sin(iriPhase * 6.2832 + 2.094),
@@ -519,22 +535,22 @@ void main(){
     );
 
     // Combine
-    float ambient = 0.07;
+    float ambient = 0.06;
     float diffuse = diff1 + diff2 + diff3;
-    vec3 color = uLiquidColor * (ambient + diffuse * 0.45);
+    vec3 color = uLiquidColor * (ambient + diffuse * 0.4);
 
-    // Specular
-    color += uSpecularColor * (spec1 * 0.65 + spec2 * 0.3 + spec3 * 0.45);
+    // Specular highlights (sharp, bright)
+    color += uSpecularColor * (spec1 * 0.7 + spec2 * 0.35 + spec3 * 0.5);
 
-    // Fresnel edge
-    color += fresnel * mix(uSpecularColor, iri * uIri, uIri) * 0.45;
+    // Fresnel edge glow
+    color += fresnel * mix(uSpecularColor * 0.6, iri * uIri, uIri) * 0.5;
 
     // Environment + rim
-    color += envCol * fresnel * 0.25;
-    color += uSpecularColor * rim * fresnel * 0.5;
+    color += envCol * fresnel * 0.3;
+    color += uSpecularColor * rim * fresnel * 0.6;
 
-    // Spike tip glow
-    color += uSpecularColor * smoothstep(0.2, 0.65, vDisp) * 0.08;
+    // Spike tip highlight
+    color += uSpecularColor * smoothstep(0.15, 0.5, vDisp) * 0.12;
 
     // Reinhard tone-map + gamma
     color = color / (1.0 + color);
@@ -558,7 +574,7 @@ const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
 // ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(2, 6);
+const geo = new THREE.IcosahedronGeometry(1.0, 7);
 
 const uniforms = {
     uTime:      { value: 0 },
@@ -585,7 +601,7 @@ scene.add(blob);
 // ---- ORBIT CONTROLS ----
 const orbit = {
     rotX: 0.15, rotY: 0, targetRotX: 0.15, targetRotY: 0,
-    dist: 6.5, targetDist: 6.5,
+    dist: 4.5, targetDist: 4.5,
     dragging: false, dragStart: null, hasMoved: false,
     lastX: 0, lastY: 0, pinchDist: 0,
 
@@ -611,7 +627,7 @@ const orbit = {
     },
     zoom(delta) {
         this.targetDist += delta * 0.008;
-        this.targetDist = Math.max(3.5, Math.min(12, this.targetDist));
+        this.targetDist = Math.max(2.5, Math.min(10, this.targetDist));
     },
     update() {
         if (!this.dragging) this.targetRotY += 0.0015; // auto-rotate
