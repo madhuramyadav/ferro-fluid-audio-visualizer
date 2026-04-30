@@ -228,6 +228,28 @@
             cursor: pointer;
         }
 
+        /* View mode buttons */
+        .view-btn {
+            padding: 6px 14px;
+            border-radius: 16px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.5);
+            font-size: 11px; font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.25s;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+        }
+        .view-btn:active { transform: scale(0.92); }
+        .view-btn.active {
+            border-color: rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
         /* Circular frame viewport */
         #frame {
             position: fixed;
@@ -303,36 +325,15 @@
             <span class="btn-label">Music</span>
         </div>
     </div>
-    <div class="ctrl-group">
-        <div class="btn-wrap">
-            <button class="btn" id="frameBtn" title="Toggle Frame">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                </svg>
-            </button>
-            <span class="btn-label">Frame</span>
-        </div>
-        <div class="btn-wrap">
-            <button class="btn" id="glowBtn" title="Toggle Glow">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="5"/>
-                    <line x1="12" y1="1" x2="12" y2="4"/>
-                    <line x1="12" y1="20" x2="12" y2="23"/>
-                    <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
-                    <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
-                    <line x1="1" y1="12" x2="4" y2="12"/>
-                    <line x1="20" y1="12" x2="23" y2="12"/>
-                    <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
-                    <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
-                </svg>
-            </button>
-            <span class="btn-label">Glow</span>
-        </div>
+    <div class="ctrl-group" id="viewModes">
+        <button class="view-btn active" data-view="free">Free</button>
+        <button class="view-btn" data-view="display">Display</button>
+        <button class="view-btn" data-view="spotlight">Spotlight</button>
     </div>
     <div class="ctrl-group">
         <div class="gain-wrap">
             <span class="gain-label">Gain</span>
-            <input type="range" class="gain-slider" id="gainSlider" min="0.5" max="6" step="0.1" value="2.5">
+            <input type="range" class="gain-slider" id="gainSlider" min="1" max="12" step="0.1" value="5.0">
         </div>
     </div>
 </div>
@@ -475,30 +476,30 @@ float snoise(vec3 v){
 // Compute displacement at a point (reusable for normal estimation)
 float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, float highMid, float high) {
     // Ambient: subtle breathing (nearly spherical at rest)
-    float d = snoise(pos * 1.5 + t * 0.1) * 0.015;
+    float d = snoise(pos * 1.5 + t * 0.1) * 0.008;
 
     // Bass: large organic swells
     float bn = snoise(pos * 0.8 + t * 0.12 + 10.0);
-    d += max(bn, 0.0) * bass * 0.6;
+    d += max(bn, 0.0) * bass * 0.9;
 
     // Low-mid: medium bumps
     float lmn = snoise(pos * 2.0 + t * 0.18 + 20.0);
-    d += max(lmn - 0.05, 0.0) * lowMid * 0.5;
+    d += max(lmn - 0.05, 0.0) * lowMid * 0.7;
 
     // Mid: spiky protrusions
     float mn = snoise(pos * 3.5 + t * 0.25 + 30.0);
     float midD = max(mn - 0.1, 0.0);
-    d += pow(midD, 1.8) * mid * 0.7;
+    d += pow(midD, 1.5) * mid * 1.1;
 
     // High-mid: sharp spikes
     float hmn = snoise(pos * 6.0 + t * 0.32 + 40.0);
     float hmD = max(hmn - 0.15, 0.0);
-    d += pow(hmD, 2.2) * highMid * 0.5;
+    d += pow(hmD, 1.8) * highMid * 0.8;
 
     // Highs: fine needles
     float hn = snoise(pos * 10.0 + t * 0.45 + 50.0);
     float hD = max(hn - 0.2, 0.0);
-    d += pow(hD, 3.0) * high * 0.4;
+    d += pow(hD, 2.5) * high * 0.6;
 
     return d;
 }
@@ -626,7 +627,7 @@ const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
 // ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(1.0, 7);
+const geo = new THREE.IcosahedronGeometry(0.5, 7);
 
 const uniforms = {
     uTime:      { value: 0 },
@@ -686,7 +687,7 @@ let glowEnabled = false;
 // ---- ORBIT CONTROLS ----
 const orbit = {
     rotX: 0.15, rotY: 0, targetRotX: 0.15, targetRotY: 0,
-    dist: 4.5, targetDist: 4.5,
+    dist: 3.2, targetDist: 3.2,
     dragging: false, dragStart: null, hasMoved: false,
     lastX: 0, lastY: 0, pinchDist: 0,
 
@@ -828,7 +829,7 @@ let micSource = null;
 let audioEl = null;
 let audioSource = null;
 let audioState = 'idle'; // idle | mic | playing | paused
-let gain = 2.5;
+let gain = 5.0;
 
 // Smoothed band values
 const bands = { bass: 0, lowMid: 0, mid: 0, highMid: 0, high: 0 };
@@ -839,8 +840,8 @@ function initAudio() {
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 512;
     analyser.smoothingTimeConstant = 0.7;
-    analyser.minDecibels = -100;
-    analyser.maxDecibels = -20;
+    analyser.minDecibels = -110;
+    analyser.maxDecibels = -10;
     freqData = new Uint8Array(analyser.frequencyBinCount);
     return audioCtx;
 }
@@ -987,12 +988,13 @@ function updateAudioData() {
 
     const g = gain;
     // Frequency bands mapped for 256 bins (~86 Hz per bin at 44.1kHz)
+    // Capped at 1.5 to allow headroom for dramatic spikes
     const raw = {
-        bass:    Math.min(avg(freqData, 0, 8)    * g, 1),   // ~0-690 Hz
-        lowMid:  Math.min(avg(freqData, 8, 24)   * g, 1),   // ~690-2070 Hz
-        mid:     Math.min(avg(freqData, 24, 64)  * g, 1),   // ~2-5.5 kHz
-        highMid: Math.min(avg(freqData, 64, 128) * g, 1),   // ~5.5-11 kHz
-        high:    Math.min(avg(freqData, 128, bins) * g, 1)   // ~11-22 kHz
+        bass:    Math.min(avg(freqData, 0, 8)    * g, 1.5),
+        lowMid:  Math.min(avg(freqData, 8, 24)   * g, 1.5),
+        mid:     Math.min(avg(freqData, 24, 64)  * g, 1.5),
+        highMid: Math.min(avg(freqData, 64, 128) * g, 1.5),
+        high:    Math.min(avg(freqData, 128, bins) * g, 1.5)
     };
 
     // Smooth (lower = more responsive)
@@ -1031,18 +1033,31 @@ document.getElementById('gainSlider').addEventListener('input', e => {
     gain = parseFloat(e.target.value);
 });
 
-// Frame toggle
-document.getElementById('frameBtn').addEventListener('click', () => {
-    const frame = document.getElementById('frame');
-    frame.classList.toggle('active');
-    document.getElementById('frameBtn').classList.toggle('active', frame.classList.contains('active'));
-});
+// ---- VIEW MODES ----
+const VIEW_MODES = {
+    free:      { frame: false, glow: false, label: 'Free' },
+    display:   { frame: true,  glow: true,  label: 'Display' },
+    spotlight: { frame: false, glow: true,  label: 'Spotlight' }
+};
+let currentView = 'free';
 
-// Glow toggle
-document.getElementById('glowBtn').addEventListener('click', () => {
-    glowEnabled = !glowEnabled;
-    glowSprite.visible = glowEnabled;
-    document.getElementById('glowBtn').classList.toggle('active', glowEnabled);
+function setView(mode) {
+    const v = VIEW_MODES[mode];
+    if (!v) return;
+    currentView = mode;
+    // Frame
+    document.getElementById('frame').classList.toggle('active', v.frame);
+    // Glow
+    glowEnabled = v.glow;
+    glowSprite.visible = v.glow;
+    // Update buttons
+    document.querySelectorAll('.view-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.view === mode);
+    });
+}
+
+document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => setView(btn.dataset.view));
 });
 
 // ---- RESIZE ----
