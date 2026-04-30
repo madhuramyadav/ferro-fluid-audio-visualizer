@@ -260,8 +260,28 @@
             letter-spacing: 1.5px; font-weight: 600;
         }
 
-        /* Mode buttons (shared style for view + viz modes) */
-        .view-btn, .viz-btn {
+        /* Viz dropdown */
+        .viz-select {
+            -webkit-appearance: none; appearance: none;
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 12px; font-weight: 600;
+            padding: 7px 28px 7px 12px;
+            cursor: pointer; outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+        .viz-select option {
+            background: #1a1a1a; color: #fff;
+        }
+
+        /* Mode buttons (view modes) */
+        .view-btn {
             padding: 6px 14px;
             border-radius: 16px;
             border: 1.5px solid rgba(255,255,255,0.15);
@@ -275,8 +295,8 @@
             -webkit-tap-highlight-color: transparent;
             outline: none;
         }
-        .view-btn:active, .viz-btn:active { transform: scale(0.92); }
-        .view-btn.active, .viz-btn.active {
+        .view-btn:active { transform: scale(0.92); }
+        .view-btn.active {
             border-color: rgba(255,255,255,0.6);
             background: rgba(255,255,255,0.15);
             color: #fff;
@@ -372,19 +392,22 @@
             <span class="btn-label">Music</span>
         </div>
     </div>
-    <div class="ctrl-group" id="vizModes">
-        <button class="viz-btn active" data-viz="spikes">Spikes</button>
-        <button class="viz-btn" data-viz="blob">Blob</button>
-        <button class="viz-btn" data-viz="bars">Bars</button>
-        <button class="viz-btn" data-viz="wave">Wave</button>
-        <button class="viz-btn" data-viz="helix">Helix</button>
-        <button class="viz-btn" data-viz="particles">Particles</button>
-        <button class="viz-btn" data-viz="rings">Rings</button>
-        <button class="viz-btn" data-viz="tendrils">Tendrils</button>
-        <button class="viz-btn" data-viz="galaxy">Galaxy</button>
-        <button class="viz-btn" data-viz="jellyfish">Jellyfish</button>
-        <button class="viz-btn" data-viz="heartbeat">Heartbeat</button>
-        <button class="viz-btn" data-viz="fireworks">Fireworks</button>
+    <div class="ctrl-group">
+        <span class="gain-label">Style</span>
+        <select id="vizSelect" class="viz-select">
+            <option value="spikes">Spikes</option>
+            <option value="blob">Blob</option>
+            <option value="bars">Bars</option>
+            <option value="wave">Wave</option>
+            <option value="helix">Helix</option>
+            <option value="particles">Particles</option>
+            <option value="rings">Rings</option>
+            <option value="tendrils">Tendrils</option>
+            <option value="galaxy">Galaxy</option>
+            <option value="jellyfish">Jellyfish</option>
+            <option value="heartbeat">Heartbeat</option>
+            <option value="fireworks">Fireworks</option>
+        </select>
     </div>
     <div class="ctrl-group" id="viewModes">
         <button class="view-btn active" data-view="free">Free</button>
@@ -934,12 +957,11 @@ function switchVizMode(mode) {
         m.color.setRGB(th.liquid[0]+0.02,th.liquid[1]+0.02,th.liquid[2]+0.02);
         if(m.specular) m.specular.setRGB(th.specular[0]*0.7,th.specular[1]*0.7,th.specular[2]*0.7);
     });
-    document.querySelectorAll('.viz-btn').forEach(b=>
-        b.classList.toggle('active',b.dataset.viz===mode));
+    document.getElementById('vizSelect').value = mode;
 }
 activeVizUpdate = VIZ.spikes.update;
-document.querySelectorAll('.viz-btn').forEach(btn=>
-    btn.addEventListener('click',()=>switchVizMode(btn.dataset.viz)));
+document.getElementById('vizSelect').addEventListener('change', e =>
+    switchVizMode(e.target.value));
 
 // ---- GLOW DISC (backlight behind blob) ----
 function createGlowTexture() {
