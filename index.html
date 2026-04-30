@@ -228,6 +228,25 @@
             cursor: pointer;
         }
 
+        /* Circular frame viewport */
+        #frame {
+            position: fixed;
+            top: 50%; left: 50%;
+            width: min(60vw, 60vh);
+            height: min(60vw, 60vh);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 6px solid #1a1a1a;
+            box-shadow:
+                0 0 0 max(100vw, 100vh) rgba(8,8,8,0.97),
+                inset 0 0 40px rgba(0,0,0,0.4),
+                0 0 30px rgba(0,0,0,0.6);
+            pointer-events: none;
+            z-index: 3;
+            display: none;
+        }
+        #frame.active { display: block; }
+
         /* Responsive: stack on very small screens */
         @media (max-width: 500px) {
             #controls { flex-wrap: wrap; gap: 8px; }
@@ -238,6 +257,7 @@
 <body>
 
 <div id="vignette"></div>
+<div id="frame"></div>
 <div id="title">KINETIC ALIEN</div>
 <div id="status"></div>
 <div id="levelMeter"><div id="levelBar"></div></div>
@@ -284,6 +304,32 @@
         </div>
     </div>
     <div class="ctrl-group">
+        <div class="btn-wrap">
+            <button class="btn" id="frameBtn" title="Toggle Frame">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+            </button>
+            <span class="btn-label">Frame</span>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn" id="glowBtn" title="Toggle Glow">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="4"/>
+                    <line x1="12" y1="20" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
+                    <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="4" y2="12"/>
+                    <line x1="20" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
+                    <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+                </svg>
+            </button>
+            <span class="btn-label">Glow</span>
+        </div>
+    </div>
+    <div class="ctrl-group">
         <div class="gain-wrap">
             <span class="gain-label">Gain</span>
             <input type="range" class="gain-slider" id="gainSlider" min="0.5" max="6" step="0.1" value="2.5">
@@ -305,6 +351,7 @@ const THEMES = {
         bg: [0.91, 0.45, 0.05],
         liquid: [0.012, 0.012, 0.018],
         specular: [0.75, 0.78, 0.88],
+        glow: [1.0, 0.5, 0.05],
         iri: 0.2,
         swatch: '#E87410'
     },
@@ -312,6 +359,7 @@ const THEMES = {
         bg: [0.075, 0.11, 0.22],
         liquid: [0.008, 0.008, 0.015],
         specular: [0.45, 0.5, 0.82],
+        glow: [0.2, 0.15, 0.6],
         iri: 0.3,
         swatch: '#16213E'
     },
@@ -319,6 +367,7 @@ const THEMES = {
         bg: [0.0, 0.0, 0.0],
         liquid: [0.82, 0.84, 0.88],
         specular: [1.0, 1.0, 1.0],
+        glow: [0.1, 0.35, 0.85],
         iri: 0.08,
         swatch: '#B8BCC4'
     },
@@ -326,6 +375,7 @@ const THEMES = {
         bg: [0.02, 0.045, 0.1],
         liquid: [0.01, 0.012, 0.028],
         specular: [0.2, 0.5, 0.92],
+        glow: [0.0, 0.35, 0.75],
         iri: 0.25,
         swatch: '#0B1E3D'
     },
@@ -333,6 +383,7 @@ const THEMES = {
         bg: [0.14, 0.02, 0.02],
         liquid: [0.015, 0.008, 0.008],
         specular: [0.92, 0.18, 0.12],
+        glow: [0.75, 0.05, 0.02],
         iri: 0.2,
         swatch: '#3D0A0A'
     },
@@ -340,6 +391,7 @@ const THEMES = {
         bg: [0.12, 0.06, 0.01],
         liquid: [0.012, 0.01, 0.008],
         specular: [1.0, 0.55, 0.1],
+        glow: [0.9, 0.4, 0.02],
         iri: 0.18,
         swatch: '#5C2E08'
     }
@@ -598,6 +650,39 @@ const mat = new THREE.ShaderMaterial({
 const blob = new THREE.Mesh(geo, mat);
 scene.add(blob);
 
+// ---- GLOW DISC (backlight behind blob) ----
+function createGlowTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512; c.height = 512;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.25, 'rgba(255,255,255,0.8)');
+    g.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+    g.addColorStop(0.75, 'rgba(255,255,255,0.08)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 512, 512);
+    return new THREE.CanvasTexture(c);
+}
+
+const glowMat = new THREE.SpriteMaterial({
+    map: createGlowTexture(),
+    color: new THREE.Color(0.1, 0.35, 0.85),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.7
+});
+const glowSprite = new THREE.Sprite(glowMat);
+glowSprite.scale.set(5, 5, 1);
+glowSprite.position.z = -0.5;
+glowSprite.visible = false; // off by default, toggle with button
+scene.add(glowSprite);
+
+const targetGlow = new THREE.Color();
+let glowEnabled = false;
+
 // ---- ORBIT CONTROLS ----
 const orbit = {
     rotX: 0.15, rotY: 0, targetRotX: 0.15, targetRotY: 0,
@@ -715,8 +800,8 @@ function setTheme(name) {
     targetBg.setRGB(t.bg[0], t.bg[1], t.bg[2]);
     targetLiquid.setRGB(t.liquid[0], t.liquid[1], t.liquid[2]);
     targetSpec.setRGB(t.specular[0], t.specular[1], t.specular[2]);
+    targetGlow.setRGB(t.glow[0], t.glow[1], t.glow[2]);
     targetIri = t.iri;
-    // Update active swatch
     document.querySelectorAll('.theme-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.theme === name);
     });
@@ -732,6 +817,7 @@ currentBg.copy(targetBg);
 uniforms.uLiquidColor.value.copy(targetLiquid);
 uniforms.uSpecularColor.value.copy(targetSpec);
 uniforms.uIri.value = targetIri;
+glowMat.color.copy(targetGlow);
 
 // ---- AUDIO ENGINE ----
 let audioCtx = null;
@@ -945,6 +1031,20 @@ document.getElementById('gainSlider').addEventListener('input', e => {
     gain = parseFloat(e.target.value);
 });
 
+// Frame toggle
+document.getElementById('frameBtn').addEventListener('click', () => {
+    const frame = document.getElementById('frame');
+    frame.classList.toggle('active');
+    document.getElementById('frameBtn').classList.toggle('active', frame.classList.contains('active'));
+});
+
+// Glow toggle
+document.getElementById('glowBtn').addEventListener('click', () => {
+    glowEnabled = !glowEnabled;
+    glowSprite.visible = glowEnabled;
+    document.getElementById('glowBtn').classList.toggle('active', glowEnabled);
+});
+
 // ---- RESIZE ----
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -979,8 +1079,17 @@ function animate() {
     uniforms.uSpecularColor.value.lerp(targetSpec, 0.04);
     uniforms.uIri.value += (targetIri - uniforms.uIri.value) * 0.04;
 
+    // Glow: smooth color transition + audio pulse
+    if (glowEnabled) {
+        glowMat.color.lerp(targetGlow, 0.04);
+        const energy = (bands.bass + bands.mid) * 0.5;
+        glowMat.opacity = 0.5 + energy * 0.5;
+        const glowScale = 4.5 + energy * 2.0;
+        glowSprite.scale.set(glowScale, glowScale, 1);
+    }
+
     // Gentle bobbing
-    blob.position.y = Math.sin(t * 0.4) * 0.08;
+    blob.position.y = Math.sin(t * 0.4) * 0.06;
 
     // Update orbit camera
     orbit.update();
