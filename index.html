@@ -378,6 +378,13 @@
         <button class="viz-btn" data-viz="bars">Bars</button>
         <button class="viz-btn" data-viz="wave">Wave</button>
         <button class="viz-btn" data-viz="helix">Helix</button>
+        <button class="viz-btn" data-viz="particles">Particles</button>
+        <button class="viz-btn" data-viz="rings">Rings</button>
+        <button class="viz-btn" data-viz="tendrils">Tendrils</button>
+        <button class="viz-btn" data-viz="galaxy">Galaxy</button>
+        <button class="viz-btn" data-viz="jellyfish">Jellyfish</button>
+        <button class="viz-btn" data-viz="heartbeat">Heartbeat</button>
+        <button class="viz-btn" data-viz="fireworks">Fireworks</button>
     </div>
     <div class="ctrl-group" id="viewModes">
         <button class="view-btn active" data-view="free">Free</button>
@@ -656,6 +663,263 @@ let activeVizUpdate = null;
     }};
 })();
 
+// ---- PARTICLES ----
+(function(){
+    const N=500;
+    const geo=new THREE.BufferGeometry();
+    const pos=new Float32Array(N*3);
+    const vel=[], home=[];
+    for(let i=0;i<N;i++){
+        const d=fibDir(i,N), r=0.05+Math.random()*0.1;
+        pos[i*3]=d.x*r; pos[i*3+1]=d.y*r; pos[i*3+2]=d.z*r;
+        home.push(d.clone().multiplyScalar(r));
+        vel.push(new THREE.Vector3());
+    }
+    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const mat=new THREE.PointsMaterial({color:0x888888,size:0.012,sizeAttenuation:true});
+    const pts=new THREE.Points(geo,mat);
+    const grp=new THREE.Group(); grp.add(pts); scene.add(grp); grp.visible=false;
+    const bk=['bass','lowMid','mid','highMid','high'];
+    VIZ.particles={meshes:[grp],mats:[mat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        const pa=geo.attributes.position;
+        for(let i=0;i<N;i++){
+            const h=home[i], bVal=bands[bk[i%5]];
+            const force=bVal*0.015;
+            vel[i].addScaledVector(h.clone().normalize(),force);
+            const cx=pa.getX(i),cy=pa.getY(i),cz=pa.getZ(i);
+            vel[i].x+=(h.x-cx)*0.015; vel[i].y+=(h.y-cy)*0.015; vel[i].z+=(h.z-cz)*0.015;
+            vel[i].multiplyScalar(0.96);
+            pa.setXYZ(i,cx+vel[i].x,cy+vel[i].y,cz+vel[i].z);
+        }
+        pa.needsUpdate=true;
+        mat.size=0.008+en*0.02;
+        grp.rotation.y+=0.0008+en*0.003;
+    }};
+})();
+
+// ---- RINGS ----
+(function(){
+    const COUNT=5, mats=[];
+    const grp=new THREE.Group(); scene.add(grp); grp.visible=false;
+    const meshes=[];
+    const bk=['bass','lowMid','mid','highMid','high'];
+    const hData=[];
+    for(let i=0;i<COUNT;i++){
+        const tg=new THREE.TorusGeometry(0.25+i*0.08,0.012,8,64);
+        const m=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:160});
+        const mesh=new THREE.Mesh(tg,m);
+        mesh.position.y=(i-2)*0.12;
+        mesh.rotation.x=Math.PI/2;
+        grp.add(mesh); meshes.push(mesh); mats.push(m);
+        hData.push({scale:1,rotZ:0});
+    }
+    VIZ.rings={meshes:[grp],mats:mats,update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let i=0;i<COUNT;i++){
+            const bVal=bands[bk[i]];
+            const d=hData[i];
+            const ts=1+bVal*0.5;
+            d.scale+=(ts-d.scale)*0.15;
+            meshes[i].scale.set(d.scale,d.scale,1+bVal*0.3);
+            meshes[i].rotation.z+=0.002*(i+1)+bVal*0.01;
+            meshes[i].position.y=(i-2)*0.12+Math.sin(t*0.3+i)*0.02;
+        }
+        grp.rotation.y+=0.001+en*0.003;
+    }};
+})();
+
+// ---- TENDRILS ----
+(function(){
+    const ARMS=8, SEGS=25, TOTAL=ARMS*SEGS;
+    const sg=new THREE.SphereGeometry(1,6,6);
+    const mat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:160});
+    const mesh=new THREE.InstancedMesh(sg,mat,TOTAL);
+    const grp=new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
+    const bk=['bass','lowMid','mid','highMid','high'];
+    VIZ.tendrils={meshes:[grp],mats:[mat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let a=0;a<ARMS;a++){
+            const baseAng=(a/ARMS)*Math.PI*2;
+            const bVal=bands[bk[a%5]];
+            for(let s=0;s<SEGS;s++){
+                const prog=s/SEGS;
+                const idx=a*SEGS+s;
+                const r=0.03+prog*(0.3+bVal*0.3);
+                const wave=Math.sin(t*0.8+prog*4+a*1.5)*0.15*prog;
+                const wave2=Math.cos(t*0.6+prog*3+a*2.1)*0.1*prog;
+                const ang=baseAng+wave;
+                _pos.set(Math.cos(ang)*r, wave2+Math.sin(t*0.3+a)*0.05, Math.sin(ang)*r);
+                const sz=Math.max(0.008*(1-prog*0.6)+bVal*0.006,0.003);
+                _scl.setScalar(sz);
+                _mat4.compose(_pos,_quat.identity(),_scl);
+                mesh.setMatrixAt(idx,_mat4);
+            }
+        }
+        mesh.instanceMatrix.needsUpdate=true;
+        grp.rotation.y+=0.0008+en*0.002;
+    }};
+})();
+
+// ---- GALAXY ----
+(function(){
+    const N=400, ARMS_N=3;
+    const geo=new THREE.BufferGeometry();
+    const pos=new Float32Array(N*3);
+    const pData=[];
+    for(let i=0;i<N;i++){
+        const arm=i%ARMS_N;
+        const prog=Math.random();
+        const armAng=(arm/ARMS_N)*Math.PI*2;
+        const spiralAng=armAng+prog*Math.PI*2;
+        const r=0.05+prog*0.5;
+        const spread=(Math.random()-0.5)*0.08*(1+prog);
+        pos[i*3]=Math.cos(spiralAng)*r+spread;
+        pos[i*3+1]=(Math.random()-0.5)*0.04;
+        pos[i*3+2]=Math.sin(spiralAng)*r+spread;
+        pData.push({arm,prog,baseR:r,spiralAng,spread});
+    }
+    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const mat=new THREE.PointsMaterial({color:0x888888,size:0.01,sizeAttenuation:true});
+    const pts=new THREE.Points(geo,mat);
+    const grp=new THREE.Group(); grp.add(pts); scene.add(grp); grp.visible=false;
+    const bk=['bass','lowMid','mid','highMid','high'];
+    VIZ.galaxy={meshes:[grp],mats:[mat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        const pa=geo.attributes.position;
+        for(let i=0;i<N;i++){
+            const d=pData[i];
+            const bVal=bands[bk[d.arm%5]];
+            const ang=d.spiralAng+t*0.15*(1-d.prog*0.5);
+            const r=d.baseR+bVal*0.15;
+            pa.setXYZ(i,
+                Math.cos(ang)*r+d.spread,
+                (Math.random()-0.5)*0.02+bVal*0.05*Math.sin(t+i),
+                Math.sin(ang)*r+d.spread);
+        }
+        pa.needsUpdate=true;
+        mat.size=0.006+en*0.015;
+        grp.rotation.y+=0.002+en*0.005;
+    }};
+})();
+
+// ---- JELLYFISH ----
+(function(){
+    // Dome (half sphere)
+    const domeGeo=new THREE.SphereGeometry(0.15,32,16,0,Math.PI*2,0,Math.PI/2);
+    const domeMat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:200,transparent:true,opacity:0.85});
+    const dome=new THREE.Mesh(domeGeo,domeMat);
+    // Tentacles: 10 arms x 18 segments
+    const T_ARMS=10,T_SEGS=18,T_TOTAL=T_ARMS*T_SEGS;
+    const tGeo=new THREE.SphereGeometry(1,5,5);
+    const tMat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:140});
+    const tMesh=new THREE.InstancedMesh(tGeo,tMat,T_TOTAL);
+    const grp=new THREE.Group(); grp.add(dome); grp.add(tMesh);
+    scene.add(grp); grp.visible=false;
+    const bk=['bass','lowMid','mid','highMid','high'];
+    VIZ.jellyfish={meshes:[grp],mats:[domeMat,tMat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        // Dome pulse
+        const dp=1+Math.min(bands.bass,0.6)*0.25;
+        dome.scale.set(dp,0.7+en*0.2,dp);
+        dome.position.y=Math.sin(t*0.4)*0.03;
+        // Tentacles
+        for(let a=0;a<T_ARMS;a++){
+            const baseAng=(a/T_ARMS)*Math.PI*2;
+            const bVal=bands[bk[a%5]];
+            const armR=0.06+a*0.005;
+            for(let s=0;s<T_SEGS;s++){
+                const prog=s/T_SEGS;
+                const idx=a*T_SEGS+s;
+                const y=-prog*(0.4+bVal*0.25);
+                const sway=Math.sin(t*0.7+prog*3+a*1.3)*0.08*prog;
+                const sway2=Math.cos(t*0.5+prog*2.5+a*1.8)*0.06*prog;
+                const r=armR+sway;
+                _pos.set(Math.cos(baseAng)*r+sway2, y+dome.position.y, Math.sin(baseAng)*r);
+                const sz=Math.max(0.007*(1-prog*0.7)+bVal*0.003,0.002);
+                _scl.setScalar(sz);
+                _mat4.compose(_pos,_quat.identity(),_scl);
+                tMesh.setMatrixAt(idx,_mat4);
+            }
+        }
+        tMesh.instanceMatrix.needsUpdate=true;
+        grp.rotation.y+=0.0006;
+        grp.rotation.z=Math.sin(t*0.15)*0.05;
+    }};
+})();
+
+// ---- HEARTBEAT ----
+(function(){
+    const geo=new THREE.SphereGeometry(0.2,32,32);
+    const mat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:200});
+    const mesh=new THREE.Mesh(geo,mat);
+    const grp=new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
+    let curScale=1, beatPhase=0;
+    VIZ.heartbeat={meshes:[grp],mats:[mat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        // Double-pump heartbeat driven by bass
+        const beat=Math.min(bands.bass,0.8);
+        const pump1=Math.pow(Math.max(Math.sin(t*4+beat*2),0),3);
+        const pump2=Math.pow(Math.max(Math.sin(t*4+beat*2+0.8),0),5)*0.5;
+        const target=1+beat*0.4+(pump1+pump2)*0.15;
+        curScale+=(Math.min(target,1.8)-curScale)*0.2;
+        mesh.scale.setScalar(curScale);
+        // Slight squash on beat
+        mesh.scale.y=curScale*(1-beat*0.08);
+        mesh.scale.x=curScale*(1+beat*0.04);
+        grp.rotation.y+=0.0005;
+        grp.position.y=Math.sin(t*0.3)*0.02;
+    }};
+})();
+
+// ---- FIREWORKS ----
+(function(){
+    const MAX_P=300;
+    const geo=new THREE.BufferGeometry();
+    const pos=new Float32Array(MAX_P*3);
+    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const mat=new THREE.PointsMaterial({color:0x888888,size:0.015,sizeAttenuation:true});
+    const pts=new THREE.Points(geo,mat);
+    const grp=new THREE.Group(); grp.add(pts); scene.add(grp); grp.visible=false;
+
+    const particles=[];
+    for(let i=0;i<MAX_P;i++) particles.push({x:0,y:0,z:0,vx:0,vy:0,vz:0,life:0});
+    let prevBass=0, burstIdx=0;
+
+    VIZ.fireworks={meshes:[grp],mats:[mat],update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        // Beat detection — burst on bass onset
+        const bassDelta=bands.bass-prevBass;
+        prevBass=bands.bass;
+        if(bassDelta>0.08){
+            const count=20+Math.floor(bassDelta*40);
+            for(let i=0;i<count&&i<50;i++){
+                const p=particles[burstIdx%MAX_P];
+                const dir=fibDir(Math.floor(Math.random()*200),200);
+                const speed=0.01+Math.random()*0.02+bassDelta*0.03;
+                p.x=0;p.y=0;p.z=0;
+                p.vx=dir.x*speed;p.vy=dir.y*speed+0.005;p.vz=dir.z*speed;
+                p.life=1;
+                burstIdx++;
+            }
+        }
+        // Update particles
+        const pa=geo.attributes.position;
+        for(let i=0;i<MAX_P;i++){
+            const p=particles[i];
+            if(p.life>0){
+                p.x+=p.vx;p.y+=p.vy;p.z+=p.vz;
+                p.vy-=0.0003; // gravity
+                p.vx*=0.98;p.vy*=0.98;p.vz*=0.98;
+                p.life-=0.012;
+            }
+            pa.setXYZ(i, p.life>0?p.x:0, p.life>0?p.y:0, p.life>0?p.z:0);
+        }
+        pa.needsUpdate=true;
+        mat.size=0.01+en*0.015;
+    }};
+})();
+
 // ================================================================
 //  VIZ MODE COORDINATOR
 // ================================================================
@@ -668,7 +932,7 @@ function switchVizMode(mode) {
     const th=THEMES[currentTheme];
     VIZ[mode].mats.forEach(m=>{
         m.color.setRGB(th.liquid[0]+0.02,th.liquid[1]+0.02,th.liquid[2]+0.02);
-        m.specular.setRGB(th.specular[0]*0.7,th.specular[1]*0.7,th.specular[2]*0.7);
+        if(m.specular) m.specular.setRGB(th.specular[0]*0.7,th.specular[1]*0.7,th.specular[2]*0.7);
     });
     document.querySelectorAll('.viz-btn').forEach(b=>
         b.classList.toggle('active',b.dataset.viz===mode));
@@ -843,7 +1107,7 @@ setTheme(currentTheme);
 currentBg.copy(targetBg);
 Object.values(VIZ).forEach(v => v.mats.forEach(m => {
     m.color.copy(targetLiquid);
-    m.specular.copy(targetSpec);
+    if (m.specular) m.specular.copy(targetSpec);
 }));
 glowMat.color.copy(targetGlow);
 
@@ -1234,7 +1498,7 @@ function animate() {
     const vizMats = VIZ[currentVizMode] ? VIZ[currentVizMode].mats : [];
     vizMats.forEach(m => {
         m.color.lerp(targetLiquid, 0.04);
-        m.specular.lerp(targetSpec, 0.04);
+        if (m.specular) m.specular.lerp(targetSpec, 0.04);
     });
 
     // Total energy for glow
