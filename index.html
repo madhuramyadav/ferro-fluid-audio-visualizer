@@ -873,23 +873,28 @@ let activeVizUpdate = null;
 
 // ---- HEARTBEAT ----
 (function(){
-    const geo=new THREE.SphereGeometry(0.2,32,32);
-    const mat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:200});
+    const geo=new THREE.SphereGeometry(0.35,32,32);
+    const mat=new THREE.MeshPhongMaterial({color:0x181820,specular:0xbbbbcc,shininess:200,emissive:0x0a0a12,emissiveIntensity:0.3});
     const mesh=new THREE.Mesh(geo,mat);
-    const grp=new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
-    let curScale=1, beatPhase=0;
-    VIZ.heartbeat={meshes:[grp],mats:[mat],update(t,bands){
+    // Inner glow sphere
+    const glowGeo=new THREE.SphereGeometry(0.37,16,16);
+    const glowMat=new THREE.MeshBasicMaterial({color:0x334466,transparent:true,opacity:0.08});
+    const glowMesh=new THREE.Mesh(glowGeo,glowMat);
+    const grp=new THREE.Group(); grp.add(mesh); grp.add(glowMesh); scene.add(grp); grp.visible=false;
+    let curScale=1;
+    VIZ.heartbeat={meshes:[grp],mats:[mat,glowMat],update(t,bands){
         const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
-        // Double-pump heartbeat driven by bass
         const beat=Math.min(bands.bass,0.8);
-        const pump1=Math.pow(Math.max(Math.sin(t*4+beat*2),0),3);
-        const pump2=Math.pow(Math.max(Math.sin(t*4+beat*2+0.8),0),5)*0.5;
-        const target=1+beat*0.4+(pump1+pump2)*0.15;
-        curScale+=(Math.min(target,1.8)-curScale)*0.2;
-        mesh.scale.setScalar(curScale);
-        // Slight squash on beat
-        mesh.scale.y=curScale*(1-beat*0.08);
-        mesh.scale.x=curScale*(1+beat*0.04);
+        // Always-visible heartbeat pump (even without audio)
+        const ambientBeat=Math.pow(Math.max(Math.sin(t*2.5),0),4)*0.1;
+        const pump1=Math.pow(Math.max(Math.sin(t*4+beat*3),0),3)*0.2;
+        const pump2=Math.pow(Math.max(Math.sin(t*4+beat*3+0.7),0),5)*0.1;
+        const target=1+beat*0.35+pump1+pump2+ambientBeat;
+        curScale+=(Math.min(target,1.6)-curScale)*0.2;
+        mesh.scale.set(curScale*(1+beat*0.04),curScale*(1-beat*0.06),curScale);
+        glowMesh.scale.setScalar(curScale*1.05);
+        glowMat.opacity=0.05+en*0.15;
+        mat.emissiveIntensity=0.2+en*0.4;
         grp.rotation.y+=0.0005;
         grp.position.y=Math.sin(t*0.3)*0.02;
     }};
@@ -897,49 +902,66 @@ let activeVizUpdate = null;
 
 // ---- FIREWORKS ----
 (function(){
-    const MAX_P=300;
+    const MAX_P=400;
     const geo=new THREE.BufferGeometry();
     const pos=new Float32Array(MAX_P*3);
+    const sizes=new Float32Array(MAX_P);
     geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    const mat=new THREE.PointsMaterial({color:0x888888,size:0.015,sizeAttenuation:true});
+    const mat=new THREE.PointsMaterial({color:0xaaaaaa,size:0.018,sizeAttenuation:true});
     const pts=new THREE.Points(geo,mat);
-    const grp=new THREE.Group(); grp.add(pts); scene.add(grp); grp.visible=false;
+    // Center dot so there's always something visible
+    const dotGeo=new THREE.SphereGeometry(0.02,12,12);
+    const dotMat=new THREE.MeshPhongMaterial({color:0x181820,specular:0x999aaa,shininess:180});
+    const dot=new THREE.Mesh(dotGeo,dotMat);
+    const grp=new THREE.Group(); grp.add(pts); grp.add(dot); scene.add(grp); grp.visible=false;
 
     const particles=[];
     for(let i=0;i<MAX_P;i++) particles.push({x:0,y:0,z:0,vx:0,vy:0,vz:0,life:0});
-    let prevBass=0, burstIdx=0;
+    let prevBass=0, burstIdx=0, emitTimer=0;
 
-    VIZ.fireworks={meshes:[grp],mats:[mat],update(t,bands){
+    function emit(count, speed) {
+        for(let i=0;i<count;i++){
+            const p=particles[burstIdx%MAX_P];
+            const dir=fibDir(Math.floor(Math.random()*200),200);
+            const sp=speed*(0.5+Math.random());
+            p.x=0;p.y=0;p.z=0;
+            p.vx=dir.x*sp; p.vy=dir.y*sp+0.003; p.vz=dir.z*sp;
+            p.life=0.7+Math.random()*0.5;
+            burstIdx++;
+        }
+    }
+
+    VIZ.fireworks={meshes:[grp],mats:[mat,dotMat],update(t,bands){
         const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
         // Beat detection — burst on bass onset
         const bassDelta=bands.bass-prevBass;
         prevBass=bands.bass;
-        if(bassDelta>0.08){
-            const count=20+Math.floor(bassDelta*40);
-            for(let i=0;i<count&&i<50;i++){
-                const p=particles[burstIdx%MAX_P];
-                const dir=fibDir(Math.floor(Math.random()*200),200);
-                const speed=0.01+Math.random()*0.02+bassDelta*0.03;
-                p.x=0;p.y=0;p.z=0;
-                p.vx=dir.x*speed;p.vy=dir.y*speed+0.005;p.vz=dir.z*speed;
-                p.life=1;
-                burstIdx++;
-            }
+        if(bassDelta>0.03) emit(15+Math.floor(bassDelta*50), 0.015+bassDelta*0.03);
+
+        // Continuous ambient emission (always some particles)
+        emitTimer+=0.016;
+        if(emitTimer>0.15){
+            emitTimer=0;
+            emit(2+Math.floor(en*5), 0.005+en*0.01);
         }
+
         // Update particles
         const pa=geo.attributes.position;
         for(let i=0;i<MAX_P;i++){
             const p=particles[i];
             if(p.life>0){
-                p.x+=p.vx;p.y+=p.vy;p.z+=p.vz;
-                p.vy-=0.0003; // gravity
-                p.vx*=0.98;p.vy*=0.98;p.vz*=0.98;
-                p.life-=0.012;
+                p.x+=p.vx; p.y+=p.vy; p.z+=p.vz;
+                p.vy-=0.00025;
+                p.vx*=0.985; p.vy*=0.985; p.vz*=0.985;
+                p.life-=0.01;
+                pa.setXYZ(i, p.x, p.y, p.z);
+            } else {
+                pa.setXYZ(i, 999,999,999); // hide off-screen
             }
-            pa.setXYZ(i, p.life>0?p.x:0, p.life>0?p.y:0, p.life>0?p.z:0);
         }
         pa.needsUpdate=true;
-        mat.size=0.01+en*0.015;
+        mat.size=0.012+en*0.02;
+        dot.scale.setScalar(1+en*0.5);
     }};
 })();
 
