@@ -869,8 +869,9 @@ async function showSourceSelector() {
     // Clear old items (keep title)
     popup.querySelectorAll('.source-item,.source-divider,.source-hint').forEach(el => el.remove());
 
-    // Tab/System Audio option (Chrome/Edge only — getDisplayMedia)
-    if (navigator.mediaDevices.getDisplayMedia) {
+    // Tab/System Audio — desktop Chrome/Edge only (not supported on mobile/tablets)
+    const isDesktop = !/Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent);
+    if (isDesktop && navigator.mediaDevices.getDisplayMedia) {
         const tabBtn = document.createElement('button');
         tabBtn.className = 'source-item';
         tabBtn.innerHTML = '&#127925; Tab / System Audio';
