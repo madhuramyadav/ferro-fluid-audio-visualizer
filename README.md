@@ -1,6 +1,6 @@
 # Kinetic Alien — Audio Visualizer
 
-A mesmerizing 3D audio visualizer with **12 visualization modes**, **6 color themes**, and **3 view styles**. Inspired by ferrofluid, Marvel's Venom, and sci-fi organisms.
+A mesmerizing 3D audio visualizer with **16 visualization modes**, **6 color themes**, and **3 view styles**. Inspired by ferrofluid, Marvel's Venom, and sci-fi organisms.
 
 Built with **Three.js** and the **Web Audio API** — runs entirely in the browser as a single HTML file. No install, no build step.
 
@@ -8,23 +8,9 @@ Built with **Three.js** and the **Web Audio API** — runs entirely in the brows
 
 ---
 
-## Preview
-
-<!-- Replace with actual screenshots/recordings once deployed -->
-
-| Spikes | Blob | Helix |
-|:---:|:---:|:---:|
-| ![Spikes](./assets/preview-spikes.png) | ![Blob](./assets/preview-blob.png) | ![Helix](./assets/preview-helix.png) |
-
-| Jellyfish | Fireworks | Galaxy |
-|:---:|:---:|:---:|
-| ![Jellyfish](./assets/preview-jellyfish.png) | ![Fireworks](./assets/preview-fireworks.png) | ![Galaxy](./assets/preview-galaxy.png) |
-
-> **Video demo:** [Watch on YouTube](#) _(coming soon)_
-
 ---
 
-## 12 Visualization Modes
+## 16 Visualization Modes
 
 | Mode | Description |
 |------|-------------|
@@ -40,8 +26,12 @@ Built with **Three.js** and the **Web Audio API** — runs entirely in the brows
 | **Jellyfish** | Translucent dome + 10 trailing tentacles, sways and pulses |
 | **Heartbeat** | 3D heart shape with ECG waveform ring — pulses with bass |
 | **Fireworks** | Particle bursts that shoot outward on every beat with gravity |
+| **Lava Lamp** | Glowing metaball blobs that merge, split, and flow — fullscreen shader |
+| **Aurora** | Flowing curtains of gradient light like Northern Lights — fullscreen shader |
+| **Plasma** | Psychedelic swirling color patterns — classic plasma effect |
+| **Liquid Gradient** | Oil-on-water iridescent colors flowing with audio — fullscreen shader |
 
-Switch modes instantly via the **Style** dropdown in the controls bar.
+Switch modes via the **Style** dropdown or tap **Auto** to cycle randomly every 10 seconds.
 
 ---
 
@@ -89,7 +79,8 @@ Adjust the sensitivity slider to match your audio source. Visualization is cappe
 
 ## Features
 
-- **12 visualization modes** — from ferrofluid spikes to DNA helixes to fireworks
+- **16 visualization modes** — from ferrofluid spikes to fullscreen plasma to lava lamps
+- **Auto transition** — randomly cycles through modes every 10 seconds
 - **6 color themes** — with smooth transitions
 - **3 view modes** — Free, Display (circular frame), Spotlight
 - **Multiple audio sources** — mic, audio file, tab audio capture
