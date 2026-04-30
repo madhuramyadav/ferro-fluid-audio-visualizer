@@ -141,11 +141,45 @@
         }
         .btn:active { transform: scale(0.9); }
         .btn.active {
-            border-color: rgba(255,255,255,0.8);
-            background: rgba(255,255,255,0.2);
+            border-color: #ff4444;
+            background: rgba(255,68,68,0.25);
             color: #fff;
+            animation: pulse-glow 1.5s ease-in-out infinite;
+        }
+        .btn.playing {
+            border-color: #44cc66;
+            background: rgba(68,204,102,0.2);
+            color: #fff;
+            animation: pulse-glow-green 1.5s ease-in-out infinite;
         }
         .btn svg { pointer-events: none; }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 8px rgba(255,68,68,0.3); }
+            50% { box-shadow: 0 0 18px rgba(255,68,68,0.6); }
+        }
+        @keyframes pulse-glow-green {
+            0%, 100% { box-shadow: 0 0 8px rgba(68,204,102,0.3); }
+            50% { box-shadow: 0 0 18px rgba(68,204,102,0.6); }
+        }
+
+        .btn-label {
+            position: absolute;
+            top: -22px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            color: rgba(255,255,255,0.6);
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-weight: 600;
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .btn-wrap { position: relative; }
+        .btn-wrap:hover .btn-label,
+        .btn.active + .btn-label,
+        .btn.playing + .btn-label { opacity: 1; }
 
         /* Theme swatches */
         .theme-btn {
@@ -218,28 +252,36 @@
 <div id="controls">
     <div class="ctrl-group" id="themeGroup"></div>
     <div class="ctrl-group">
-        <button class="btn" id="micBtn" title="Microphone">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-            </svg>
-        </button>
-        <button class="btn" id="playPauseBtn" title="Play / Pause" style="display:none;">
-            <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5,3 19,12 5,21"/>
-            </svg>
-            <svg id="pauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
-                <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-            </svg>
-        </button>
-        <button class="btn" id="fileBtn" title="Load Audio">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18V5l12-2v13"/>
-                <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-            </svg>
-        </button>
+        <div class="btn-wrap">
+            <button class="btn" id="micBtn" title="Microphone">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </button>
+            <span class="btn-label" id="micLabel">Mic Off</span>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn" id="playPauseBtn" title="Play / Pause" style="display:none;">
+                <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5,3 19,12 5,21"/>
+                </svg>
+                <svg id="pauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                </svg>
+            </button>
+        </div>
+        <div class="btn-wrap">
+            <button class="btn" id="fileBtn" title="Load Audio">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                </svg>
+            </button>
+            <span class="btn-label">Music</span>
+        </div>
     </div>
     <div class="ctrl-group">
         <div class="gain-wrap">
@@ -425,8 +467,6 @@ void main(){
 
 // ---- GLSL: FRAGMENT SHADER ----
 const fragmentShader = /* glsl */`
-#extension GL_OES_standard_derivatives : enable
-
 uniform vec3 uLiquidColor;
 uniform vec3 uSpecularColor;
 uniform float uIri;
@@ -730,6 +770,7 @@ async function startMic() {
 
         audioState = 'mic';
         document.getElementById('micBtn').classList.add('active');
+        document.getElementById('micLabel').textContent = 'Mic On';
         document.getElementById('status').textContent = 'Listening...';
         document.getElementById('levelMeter').classList.add('visible');
     } catch (e) {
@@ -743,6 +784,7 @@ function stopMic() {
     if (micSource) { micSource.disconnect(); micSource = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     document.getElementById('micBtn').classList.remove('active');
+    document.getElementById('micLabel').textContent = 'Mic Off';
     document.getElementById('levelMeter').classList.remove('visible');
     if (audioState === 'mic') {
         audioState = 'idle';
