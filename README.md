@@ -1,8 +1,8 @@
-# Kinetic Alien — Ferrofluid Audio Visualizer
+# Kinetic Alien — Audio Visualizer
 
-A mesmerizing 3D audio visualizer inspired by **ferrofluid** and Marvel's **Venom symbiote**. A dark, metallic blob morphs and spikes in real-time, reacting to music or your microphone.
+A mesmerizing 3D audio visualizer with **12 visualization modes**, **6 color themes**, and **3 view styles**. Inspired by ferrofluid, Marvel's Venom, and sci-fi organisms.
 
-Built with **Three.js** and the **Web Audio API** — runs entirely in the browser, no install needed.
+Built with **Three.js** and the **Web Audio API** — runs entirely in the browser as a single HTML file. No install, no build step.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit-brightgreen?style=for-the-badge)](https://ferro-fluid-audio-visualizer.vercel.app)
 
@@ -10,32 +10,42 @@ Built with **Three.js** and the **Web Audio API** — runs entirely in the brows
 
 ## Preview
 
-<!-- Replace these with actual screenshots/recordings once deployed -->
+<!-- Replace with actual screenshots/recordings once deployed -->
 
-| Ferrofluid (Orange) | Venom (Dark Indigo) | Mercury (White on Black) |
+| Spikes | Blob | Helix |
 |:---:|:---:|:---:|
-| ![Ferrofluid Theme](./assets/preview-ferrofluid.png) | ![Venom Theme](./assets/preview-venom.png) | ![Mercury Theme](./assets/preview-mercury.png) |
+| ![Spikes](./assets/preview-spikes.png) | ![Blob](./assets/preview-blob.png) | ![Helix](./assets/preview-helix.png) |
+
+| Jellyfish | Fireworks | Galaxy |
+|:---:|:---:|:---:|
+| ![Jellyfish](./assets/preview-jellyfish.png) | ![Fireworks](./assets/preview-fireworks.png) | ![Galaxy](./assets/preview-galaxy.png) |
 
 > **Video demo:** [Watch on YouTube](#) _(coming soon)_
 
 ---
 
-## Features
+## 12 Visualization Modes
 
-- **Ferrofluid physics** — organic spikes and tendrils grow from a metallic blob, driven by audio frequencies
-- **6 stunning themes** — Ferrofluid (orange), Venom (indigo), Mercury (white/black), Ocean (navy), Crimson (red), Ember (gold)
-- **Dual audio input** — use your microphone or load any audio file
-- **Real-time frequency analysis** — bass creates large pulses, mids form spiky protrusions, highs produce fine needles
-- **Always alive** — subtle organic motion even without audio, like a living symbiote
-- **Touch-optimized** — drag to rotate, pinch to zoom, tap to toggle controls — works great on tablets
-- **Gain control** — adjust audio sensitivity to match your environment
-- **Smooth theme transitions** — colors blend seamlessly when switching themes
-- **Zero dependencies** — single HTML file, Three.js loaded from CDN
-- **Cinematic look** — metallic shaders with Fresnel reflections, iridescence, multi-light setup, and vignette overlay
+| Mode | Description |
+|------|-------------|
+| **Spikes** | Tiny core sphere + 120 thin cone needles that grow with audio |
+| **Blob** | Connected liquid sphere with vertex displacement — organic ferrofluid |
+| **Bars** | 64 radial equalizer bars arranged in a circle |
+| **Wave** | Circular ribbon ring that undulates with frequency data |
+| **Helix** | Double DNA spiral of 120 pulsing spheres |
+| **Particles** | 500 dots that explode outward on beats and drift back |
+| **Rings** | 5 stacked torus rings, each reacting to a different frequency band |
+| **Tendrils** | 8 organic tentacles that wave and extend — Venom/alien feel |
+| **Galaxy** | 3-arm spiral of stars rotating and pulsing with audio |
+| **Jellyfish** | Translucent dome + 10 trailing tentacles, sways and pulses |
+| **Heartbeat** | 3D heart shape with ECG waveform ring — pulses with bass |
+| **Fireworks** | Particle bursts that shoot outward on every beat with gravity |
+
+Switch modes instantly via the **Style** dropdown in the controls bar.
 
 ---
 
-## Themes
+## 6 Color Themes
 
 | Theme | Background | Liquid | Vibe |
 |-------|-----------|--------|------|
@@ -46,32 +56,73 @@ Built with **Three.js** and the **Web Audio API** — runs entirely in the brows
 | **Crimson** | Dark red | Black with red highlights | Carnage vibes |
 | **Ember** | Dark amber | Black with gold specular | Molten metal |
 
+Themes transition smoothly with color blending.
+
+---
+
+## 3 View Modes
+
+| View | Effect |
+|------|--------|
+| **Free** | Full screen, no frame |
+| **Display** | Circular viewport with glow backlight — like a physical ferrofluid display |
+| **Spotlight** | Glow backlight, no frame |
+
+Display mode scales the visualization to 50% to fit inside the circular viewport.
+
+---
+
+## Audio Input
+
+### Microphone
+Click the mic button to see a source selector:
+- **Tab / System Audio** (desktop Chrome/Edge only) — captures audio directly from a browser tab (e.g. YouTube). No extra software needed.
+- **Microphone devices** — pick any connected mic to capture ambient audio.
+
+### Audio File
+Click the music button to load any audio file from your device. Works on all platforms including tablets.
+
+### Gain Control
+Adjust the sensitivity slider to match your audio source. Visualization is capped to prevent overflow regardless of gain level.
+
+---
+
+## Features
+
+- **12 visualization modes** — from ferrofluid spikes to DNA helixes to fireworks
+- **6 color themes** — with smooth transitions
+- **3 view modes** — Free, Display (circular frame), Spotlight
+- **Multiple audio sources** — mic, audio file, tab audio capture
+- **Audio source selector** — pick from available input devices
+- **Touch-optimized** — drag to rotate, pinch to zoom, tap to toggle controls
+- **Tablet-friendly** — Wake Lock API keeps screen on during visualization
+- **Gain control** — adjust sensitivity with capped output
+- **Fast-attack / slow-release** — spikes snap up on beats, slowly retract
+- **Zero dependencies** — single HTML file, Three.js loaded from CDN
+- **Responsive** — works on desktop, tablet, and mobile
+
 ---
 
 ## Getting Started
 
 ### Run locally
 
-No build step — just open the file:
+No build step — just serve it:
 
 ```bash
 # Clone the repo
 git clone https://github.com/madhuramyadav/ferro-fluid-audio-visualizer.git
 cd ferro-fluid-audio-visualizer
 
-# Open in browser
-open index.html        # macOS
-start index.html       # Windows
-xdg-open index.html    # Linux
-```
-
-Or use a local server (recommended for audio file loading):
-
-```bash
+# Serve locally (required for mic access)
 npx serve .
 # or
 python -m http.server 8000
 ```
+
+Then open `http://localhost:3000` (or `:8000`).
+
+> **Note:** Microphone access requires HTTPS or localhost. Opening `index.html` directly via `file://` won't allow mic input, but audio file loading still works.
 
 ### Deploy to Vercel
 
@@ -84,55 +135,51 @@ python -m http.server 8000
 ## How It Works
 
 ```
-Microphone / Audio File
+Audio Source (Mic / File / Tab Audio)
         │
         ▼
-   Web Audio API
-   (AnalyserNode)
+   Web Audio API (AnalyserNode)
         │
         ▼
-  FFT Frequency Data
-  ┌─────┬──────┬──────┬───────┬──────┐
-  │Bass │LowMid│ Mid  │HiMid  │ High │
-  └──┬──┴──┬───┴──┬───┴──┬────┴──┬───┘
-     │     │      │      │       │
-     ▼     ▼      ▼      ▼       ▼
-  Large  Medium  Spiky  Sharp   Fine
-  pulses bumps   peaks  spikes  needles
+   FFT → 256 Frequency Bins
+        │
+   ┌────┴────────────────────────┐
+   │  5 Frequency Bands          │
+   │  Bass │ LowMid │ Mid │ ... │
+   └────┬────────────────────────┘
         │
         ▼
-  Vertex Shader (Simplex Noise × Audio)
+   Active Visualization Mode
+   (Spikes / Blob / Bars / ...)
         │
         ▼
-  Fragment Shader (Metallic Material)
-  • Fresnel reflections
-  • Multi-light setup
-  • Iridescence
-  • Tone mapping
+   Three.js Render → Canvas
 ```
 
 ### Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| 3D Rendering | [Three.js](https://threejs.org/) (r160) |
+| 3D Rendering | [Three.js](https://threejs.org/) r160 |
 | Audio Analysis | Web Audio API (AnalyserNode, FFT) |
-| Geometry | IcosahedronGeometry (detail 6, ~40K vertices) |
-| Shading | Custom GLSL vertex + fragment shaders |
-| Noise | Simplex 3D noise (Ashima Arts) |
+| Visualizations | InstancedMesh, BufferGeometry, vertex displacement |
+| Screen Wake | Wake Lock API |
+| Tab Audio | getDisplayMedia API |
 | Hosting | Vercel (static) |
 
 ---
 
 ## Controls
 
-| Action | Desktop | Tablet / Mobile |
-|--------|---------|----------------|
+| Action | Desktop | Tablet |
+|--------|---------|--------|
 | Rotate view | Click + drag | Touch + drag |
 | Zoom | Scroll wheel | Pinch |
 | Show/hide controls | Click canvas | Tap canvas |
-| Switch theme | Click swatch | Tap swatch |
-| Start microphone | Click mic button | Tap mic button |
+| Switch theme | Click color swatch | Tap swatch |
+| Switch viz mode | Style dropdown | Style dropdown |
+| Switch view | Free / Display / Spotlight buttons | Same |
+| Audio source | Click mic → select source | Tap mic → select |
 | Load audio file | Click music button | Tap music button |
 | Play/Pause | Click play/pause | Tap play/pause |
 | Adjust sensitivity | Drag gain slider | Drag gain slider |
@@ -141,14 +188,15 @@ Microphone / Audio File
 
 ## Browser Support
 
-| Browser | Supported |
-|---------|-----------|
-| Chrome / Edge | Yes |
-| Safari (macOS / iOS) | Yes |
-| Firefox | Yes |
-| Samsung Internet | Yes |
+| Browser | Mic | Tab Audio | Audio File |
+|---------|-----|-----------|------------|
+| Chrome / Edge (desktop) | Yes | Yes | Yes |
+| Chrome (Android) | Yes | Partial | Yes |
+| Safari (iOS 16.4+) | Yes | No | Yes |
+| Firefox | Yes | No | Yes |
+| Samsung Internet | Yes | No | Yes |
 
-Requires **WebGL** and **Web Audio API** support. Works on tablets (iPad, Android) with touch controls.
+Requires **WebGL** and **Web Audio API**. Wake Lock keeps tablet screens on during playback.
 
 ---
 
@@ -156,12 +204,12 @@ Requires **WebGL** and **Web Audio API** support. Works on tablets (iPad, Androi
 
 ```
 ferro-fluid-audio-visualizer/
-├── index.html      # The entire app — HTML, CSS, shaders, and JS
+├── index.html      # The entire app (HTML + CSS + JS)
 ├── assets/         # Screenshots & preview images
 └── README.md
 ```
 
-Yes, it's a single file. That's the point.
+Single file. Zero build. That's the point.
 
 ---
 
@@ -173,11 +221,12 @@ Yes, it's a single file. That's the point.
 4. Push and open a PR
 
 Ideas for contributions:
-- New themes
+- New visualization modes
+- New color themes
 - Post-processing effects (bloom, chromatic aberration)
-- Audio waveform display
-- Preset animations
 - WebXR / VR support
+- Spotify / streaming integration
+- Keyboard shortcuts for mode switching
 
 ---
 
@@ -189,12 +238,11 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- [Three.js](https://threejs.org/) — 3D rendering
-- [Ashima Arts](https://github.com/ashima/webgl-noise) — Simplex noise GLSL implementation
-- Inspired by real ferrofluid physics and Marvel's Venom
+- [Three.js](https://threejs.org/) — 3D rendering engine
+- Inspired by real ferrofluid physics, Marvel's Venom, and bioluminescent sea creatures
 
 ---
 
 <p align="center">
-  <strong>Built with obsession by <a href="https://github.com/madhuramyadav">Madhuram Yadav</a></strong>
+  <strong>Built by <a href="https://github.com/madhuramyadav">Madhuram Yadav</a></strong>
 </p>
