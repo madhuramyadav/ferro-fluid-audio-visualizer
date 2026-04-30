@@ -1050,25 +1050,33 @@ let activeVizUpdate = null;
     }};
 })();
 
-// ---- SHARED SHADER VERTEX ----
-const _shaderVert = `varying vec2 vUv; varying vec3 vNrm;
-void main(){ vUv=uv; vNrm=normalize(normalMatrix*normal);
-gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+// ---- FULLSCREEN SHADER MODES ----
+// These render on a plane that always fills the screen, not a 3D sphere.
+// Uses a separate orthographic camera so orbit controls don't affect them.
+const _shaderCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const _shaderVert = `varying vec2 vUv;
+void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`;
 
 function _shaderMode(name, fragSrc) {
-    const geo = new THREE.SphereGeometry(0.55, 64, 64);
-    const u = {uTime:{value:0},uBass:{value:0},uMid:{value:0},uHigh:{value:0},uEnergy:{value:0}};
-    const mat = new THREE.ShaderMaterial({vertexShader:_shaderVert, fragmentShader:fragSrc, uniforms:u});
+    const geo = new THREE.PlaneGeometry(2, 2);
+    const u = {uTime:{value:0},uBass:{value:0},uMid:{value:0},uHigh:{value:0},uEnergy:{value:0},
+               uRes:{value:new THREE.Vector2(window.innerWidth,window.innerHeight)}};
+    const mat = new THREE.ShaderMaterial({vertexShader:_shaderVert, fragmentShader:fragSrc, uniforms:u,
+               depthTest:false, depthWrite:false});
     const mesh = new THREE.Mesh(geo, mat);
-    const grp = new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
-    VIZ[name] = {meshes:[grp], mats:[], update(t,bands){
-        u.uTime.value=t;
-        u.uBass.value=bands.bass;
-        u.uMid.value=bands.mid;
-        u.uHigh.value=bands.high;
-        u.uEnergy.value=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
-        grp.rotation.y+=0.001;
-    }};
+    // Use a separate scene so it renders fullscreen independent of the main camera
+    const shaderScene = new THREE.Scene();
+    shaderScene.add(mesh);
+    VIZ[name] = {meshes:[], mats:[], _shaderScene:shaderScene, _mat:mat, _uniforms:u,
+        update(t,bands){
+            u.uTime.value=t;
+            u.uBass.value=bands.bass;
+            u.uMid.value=bands.mid;
+            u.uHigh.value=bands.high;
+            u.uEnergy.value=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+            u.uRes.value.set(window.innerWidth,window.innerHeight);
+        }
+    };
 }
 
 // ---- LAVA LAMP ----
@@ -1714,9 +1722,12 @@ function animate() {
     if (activeVizUpdate) activeVizUpdate(t, bands);
 
     // Smooth view scale transition (Display mode shrinks viz to fit circle)
-    viewScale += (targetViewScale - viewScale) * 0.08;
-    const vizMeshes = VIZ[currentVizMode] ? VIZ[currentVizMode].meshes : [];
-    vizMeshes.forEach(m => { if (m.visible) m.scale.setScalar(viewScale); });
+    // Only applies to 3D modes, not fullscreen shader modes
+    const vizObj2 = VIZ[currentVizMode];
+    if (vizObj2 && !vizObj2._shaderScene) {
+        viewScale += (targetViewScale - viewScale) * 0.08;
+        vizObj2.meshes.forEach(m => { if (m.visible) m.scale.setScalar(viewScale); });
+    }
 
     // Smooth theme transitions (background + active mode materials)
     currentBg.lerp(targetBg, 0.04);
@@ -1741,7 +1752,13 @@ function animate() {
     // Update orbit camera
     orbit.update();
 
-    renderer.render(scene, camera);
+    // Shader-based modes render their own fullscreen scene
+    const vizObj = VIZ[currentVizMode];
+    if (vizObj && vizObj._shaderScene) {
+        renderer.render(vizObj._shaderScene, _shaderCam);
+    } else {
+        renderer.render(scene, camera);
+    }
 }
 
 animate();
