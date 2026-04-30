@@ -477,45 +477,49 @@ float snoise(vec3 v){
 float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, float highMid, float high) {
     float energy = bass + lowMid + mid + highMid + high;
 
+    // Use UNIT SPHERE direction so noise is scale-independent.
+    // Without this, noise barely varies on tiny r=0.12 sphere.
+    vec3 np = normalize(pos);
+
     // Rotate noise space — spikes dance around the surface
-    float ra = t * 0.12 + energy * 0.2;
+    float ra = t * 0.12 + energy * 0.15;
     float rc = cos(ra), rs = sin(ra);
-    vec3 rp = vec3(pos.x*rc - pos.z*rs, pos.y, pos.x*rs + pos.z*rc);
+    vec3 rp = vec3(np.x*rc - np.z*rs, np.y, np.x*rs + np.z*rc);
 
     // Nearly perfect sphere at rest
-    float d = snoise(rp * 2.0 + t * 0.04) * 0.001;
+    float d = snoise(rp * 3.0 + t * 0.03) * 0.0008;
 
-    // === SPIKE LAYERS ===
-    // pow(max(noise,0), N) creates thin conical spikes from smooth noise.
-    // Tuned for r=0.12 sphere: spikes extend 1-3x radius.
+    // === THIN SPIKE LAYERS ===
+    // Higher freq on unit sphere = more, thinner spikes.
+    // freq 6 ≈ 6 spikes around equator, freq 20 ≈ 20 spikes.
 
-    // Tall primary spikes (bass)
-    float s1 = pow(max(snoise(rp * 3.5 + t * 0.06 + 10.0), 0.0), 4.0);
-    d += s1 * bass * 0.28;
+    // Primary spikes (bass) — tallest, few
+    float s1 = pow(max(snoise(rp * 6.0 + t * 0.05 + 10.0), 0.0), 5.0);
+    d += s1 * bass * 0.14;
 
     // Secondary spikes (low-mid)
-    float s2 = pow(max(snoise(rp * 5.0 + t * 0.08 + 20.0), 0.0), 4.5);
-    d += s2 * lowMid * 0.22;
+    float s2 = pow(max(snoise(rp * 8.0 + t * 0.07 + 20.0), 0.0), 5.0);
+    d += s2 * lowMid * 0.11;
 
-    // Dense spikes (mid) — many thin cones
-    float s3 = pow(max(snoise(rp * 7.0 + t * 0.11 + 30.0), 0.0), 5.0);
-    d += s3 * mid * 0.20;
+    // Dense thin spikes (mid)
+    float s3 = pow(max(snoise(rp * 11.0 + t * 0.09 + 30.0), 0.0), 6.0);
+    d += s3 * mid * 0.11;
 
     // Fill spikes (mid+high-mid)
-    float s4 = pow(max(snoise(rp * 9.0 + t * 0.1 + 70.0), 0.0), 5.5);
-    d += s4 * (mid + highMid) * 0.08;
+    float s4 = pow(max(snoise(rp * 14.0 + t * 0.08 + 70.0), 0.0), 6.0);
+    d += s4 * (mid + highMid) * 0.045;
 
     // Thin thorns (high-mid)
-    float s5 = pow(max(snoise(rp * 11.0 + t * 0.15 + 40.0), 0.0), 6.0);
-    d += s5 * highMid * 0.16;
+    float s5 = pow(max(snoise(rp * 18.0 + t * 0.12 + 40.0), 0.0), 7.0);
+    d += s5 * highMid * 0.09;
 
     // Fine needles (highs)
-    float s6 = pow(max(snoise(rp * 15.0 + t * 0.2 + 50.0), 0.0), 7.0);
-    d += s6 * high * 0.12;
+    float s6 = pow(max(snoise(rp * 24.0 + t * 0.16 + 50.0), 0.0), 8.0);
+    d += s6 * high * 0.07;
 
     // Splinters — ultra-fine
-    float s7 = pow(max(snoise(rp * 20.0 + t * 0.26 + 60.0), 0.0), 8.0);
-    d += s7 * high * 0.08;
+    float s7 = pow(max(snoise(rp * 32.0 + t * 0.22 + 60.0), 0.0), 9.0);
+    d += s7 * high * 0.04;
 
     return d;
 }
