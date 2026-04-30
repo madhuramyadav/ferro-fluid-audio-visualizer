@@ -4,7 +4,7 @@ A mesmerizing 3D audio visualizer with **12 visualization modes**, **6 color the
 
 Built with **Three.js** and the **Web Audio API** — runs entirely in the browser as a single HTML file. No install, no build step.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit-brightgreen?style=for-the-badge)](https://ferro-fluid-audio-visualizer.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit-brightgreen?style=for-the-badge)](https://audio-visualizer-phi.vercel.app)
 
 ---
 
