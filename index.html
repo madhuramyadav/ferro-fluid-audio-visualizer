@@ -228,8 +228,8 @@
             cursor: pointer;
         }
 
-        /* View mode buttons */
-        .view-btn {
+        /* Mode buttons (shared style for view + viz modes) */
+        .view-btn, .viz-btn {
             padding: 6px 14px;
             border-radius: 16px;
             border: 1.5px solid rgba(255,255,255,0.15);
@@ -243,8 +243,8 @@
             -webkit-tap-highlight-color: transparent;
             outline: none;
         }
-        .view-btn:active { transform: scale(0.92); }
-        .view-btn.active {
+        .view-btn:active, .viz-btn:active { transform: scale(0.92); }
+        .view-btn.active, .viz-btn.active {
             border-color: rgba(255,255,255,0.6);
             background: rgba(255,255,255,0.15);
             color: #fff;
@@ -324,6 +324,13 @@
             </button>
             <span class="btn-label">Music</span>
         </div>
+    </div>
+    <div class="ctrl-group" id="vizModes">
+        <button class="viz-btn active" data-viz="spikes">Spikes</button>
+        <button class="viz-btn" data-viz="blob">Blob</button>
+        <button class="viz-btn" data-viz="bars">Bars</button>
+        <button class="viz-btn" data-viz="wave">Wave</button>
+        <button class="viz-btn" data-viz="helix">Helix</button>
     </div>
     <div class="ctrl-group" id="viewModes">
         <button class="view-btn active" data-view="free">Free</button>
@@ -425,112 +432,202 @@ const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
 rimLight.position.set(0, -1, -2);
 scene.add(rimLight);
 
-// ---- CORE SPHERE (small metallic ball) ----
-const CORE_RADIUS = 0.04;
-const coreGeo = new THREE.SphereGeometry(CORE_RADIUS, 32, 32);
-const coreMat = new THREE.MeshPhongMaterial({
-    color: 0x080810,
-    specular: 0x999aaa,
-    shininess: 200
-});
-const core = new THREE.Mesh(coreGeo, coreMat);
-
-// ---- SPIKE SYSTEM (instanced cones — ferrofluid spikes) ----
-const SPIKE_COUNT = 120;
-const spikeGeo = new THREE.ConeGeometry(1, 1, 6); // 6 sides for rounder spikes
-spikeGeo.translate(0, 0.5, 0); // base at origin, tip at y=1
-
-const spikeMat = new THREE.MeshPhongMaterial({
-    color: 0x080810,
-    specular: 0x999aaa,
-    shininess: 180
-});
-const spikeMesh = new THREE.InstancedMesh(spikeGeo, spikeMat, SPIKE_COUNT);
-
-// Pre-compute spike directions (Fibonacci sphere)
-const spikeData = [];
-const golden = Math.PI * (1 + Math.sqrt(5));
-const yUp = new THREE.Vector3(0, 1, 0);
-
-for (let i = 0; i < SPIKE_COUNT; i++) {
-    const y = 1 - (i / (SPIKE_COUNT - 1)) * 2;
-    const r = Math.sqrt(1 - y * y);
-    const theta = golden * i;
-    const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
-
-    spikeData.push({
-        dir,
-        bandIndex: Math.floor(Math.random() * 5),
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.15 + Math.random() * 0.4,
-        sensitivity: 1.0 + Math.random() * 2.0,    // higher sensitivity
-        threshold: 0.01 + Math.random() * 0.06,     // much lower threshold
-        baseThickness: 0.004 + Math.random() * 0.004, // thicker — ferrofluid-like
-        currentHeight: 0
-    });
-}
-
-// Group so we can rotate core + spikes together
-const organism = new THREE.Group();
-organism.add(core);
-organism.add(spikeMesh);
-scene.add(organism);
-
-// Reusable objects for spike matrix updates
+// ================================================================
+//  SHARED UTILITIES
+// ================================================================
 const _mat4 = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
 const _pos = new THREE.Vector3();
 const _scl = new THREE.Vector3();
+const _yUp = new THREE.Vector3(0, 1, 0);
+const _golden = Math.PI * (1 + Math.sqrt(5));
 
-function updateSpikes(t, bands) {
-    const bandValues = [bands.bass, bands.lowMid, bands.mid, bands.highMid, bands.high];
-    const energy = (bands.bass + bands.lowMid + bands.mid + bands.highMid + bands.high) / 5;
-
-    // Core sphere pulses with bass
-    const corePulse = 1.0 + Math.min(bands.bass, 0.8) * 0.3;
-    core.scale.setScalar(corePulse);
-
-    for (let i = 0; i < SPIKE_COUNT; i++) {
-        const s = spikeData[i];
-
-        // Audio amplitude — above per-spike threshold
-        const rawAmp = bandValues[s.bandIndex];
-        const amp = Math.max(rawAmp - s.threshold, 0) * s.sensitivity;
-
-        // Ambient breathing — tiny organic pulse at rest
-        const ambientPulse = Math.sin(t * s.speed + s.phase) * 0.5 + 0.5;
-        const ambientH = 0.006 * ambientPulse;
-
-        // Target height: mainly audio-driven
-        const targetHeight = amp * 0.5 + ambientH;
-
-        // Fast-attack, slow-release (like real audio dynamics)
-        const lerpSpeed = targetHeight > s.currentHeight ? 0.3 : 0.08;
-        s.currentHeight += (targetHeight - s.currentHeight) * lerpSpeed;
-        const height = s.currentHeight;
-
-        _quat.setFromUnitVectors(yUp, s.dir);
-
-        if (height < 0.002) {
-            _scl.set(0, 0, 0);
-            _pos.set(0, 0, 0);
-        } else {
-            // Ferrofluid-like: wide base that tapers to point
-            const thick = s.baseThickness * (1.0 + height * 1.5);
-
-            // Separation: spikes lift off when energy is high
-            const separation = height > 0.02 ? Math.min(energy, 0.6) * 0.08 : 0.0;
-            const startR = CORE_RADIUS * corePulse + separation;
-
-            _pos.copy(s.dir).multiplyScalar(startR);
-            _scl.set(thick, height, thick);
-        }
-
-        _mat4.compose(_pos, _quat, _scl);
-        spikeMesh.setMatrixAt(i, _mat4);
+function fbm3(x, y, z) {
+    let v = 0, a = 0.5;
+    for (let i = 0; i < 3; i++) {
+        v += a*(Math.sin(x*1.7+y*9.2)*Math.cos(y*8.3-z*1.7)+
+               Math.sin(z*7.9+x*2.3)*Math.cos(z*1.7+x*2.7))*0.5;
+        x=x*2+1.7; y=y*2+1.7; z=z*2+1.7; a*=0.5;
     }
-    spikeMesh.instanceMatrix.needsUpdate = true;
+    return v;
 }
+
+function fibDir(i, n) {
+    const y = 1-(i/(n-1))*2, r = Math.sqrt(1-y*y), th = _golden*i;
+    return new THREE.Vector3(Math.cos(th)*r, y, Math.sin(th)*r).normalize();
+}
+
+// ================================================================
+//  VIZ MODES
+// ================================================================
+const VIZ = {};
+let currentVizMode = 'spikes';
+let activeVizUpdate = null;
+
+// ---- SPIKES ----
+(function(){
+    const CR = 0.04, N = 120;
+    const cg = new THREE.SphereGeometry(CR,32,32);
+    const cm = new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:200});
+    const core = new THREE.Mesh(cg,cm);
+    const sg = new THREE.ConeGeometry(1,1,6); sg.translate(0,0.5,0);
+    const sm = new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:180});
+    const spk = new THREE.InstancedMesh(sg,sm,N);
+    const data = [];
+    for(let i=0;i<N;i++) data.push({dir:fibDir(i,N),bi:Math.floor(Math.random()*5),
+        ph:Math.random()*Math.PI*2,sp:0.15+Math.random()*0.4,
+        sn:1+Math.random()*2,th:0.01+Math.random()*0.06,
+        bt:0.004+Math.random()*0.004,h:0});
+    const grp = new THREE.Group(); grp.add(core); grp.add(spk); scene.add(grp);
+    VIZ.spikes = { meshes:[grp], mats:[cm,sm], update(t,bands){
+        const bv=[bands.bass,bands.lowMid,bands.mid,bands.highMid,bands.high];
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        core.scale.setScalar(1+Math.min(bands.bass,0.8)*0.3);
+        for(let i=0;i<N;i++){const s=data[i];
+            const amp=Math.max(bv[s.bi]-s.th,0)*s.sn;
+            const amb=0.006*(Math.sin(t*s.sp+s.ph)*0.5+0.5);
+            const tgt=amp*0.5+amb;
+            s.h+=(tgt-s.h)*(tgt>s.h?0.3:0.08);
+            _quat.setFromUnitVectors(_yUp,s.dir);
+            if(s.h<0.002){_scl.set(0,0,0);_pos.set(0,0,0);}
+            else{const th=s.bt*(1+s.h*1.5);
+                const sep=s.h>0.02?Math.min(en,0.6)*0.08:0;
+                _pos.copy(s.dir).multiplyScalar(CR+sep);
+                _scl.set(th,s.h,th);}
+            _mat4.compose(_pos,_quat,_scl); spk.setMatrixAt(i,_mat4);}
+        spk.instanceMatrix.needsUpdate=true;
+        grp.rotation.y+=0.0008+Math.min(en,0.5)*0.004;
+        grp.rotation.x=Math.sin(t*0.12)*0.02;
+    }};
+})();
+
+// ---- BLOB ----
+(function(){
+    const geo = new THREE.IcosahedronGeometry(0.4,5);
+    const mat = new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:200});
+    const mesh = new THREE.Mesh(geo,mat);
+    const grp = new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
+    const pa = geo.attributes.position;
+    const orig = new Float32Array(pa.array);
+    const vc = pa.count;
+    const bk = ['bass','lowMid','mid','highMid','high'];
+    VIZ.blob = { meshes:[grp], mats:[mat], update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let i=0;i<vc;i++){
+            const ox=orig[i*3],oy=orig[i*3+1],oz=orig[i*3+2];
+            const ln=Math.sqrt(ox*ox+oy*oy+oz*oz)||1;
+            const nx=ox/ln,ny=oy/ln,nz=oz/ln;
+            const lat=(Math.asin(ny)+Math.PI/2)/Math.PI;
+            const bVal=bands[bk[Math.min(Math.floor(lat*5),4)]];
+            const n=fbm3(nx*2+t*0.15,ny*2+t*0.12,nz*2+t*0.1);
+            const d=0.4+n*0.08+bVal*0.25+en*0.05;
+            pa.setXYZ(i,nx*d,ny*d,nz*d);}
+        pa.needsUpdate=true; geo.computeVertexNormals();
+        grp.rotation.y+=0.001+Math.min(en,0.4)*0.003;
+        grp.rotation.x=Math.sin(t*0.1)*0.03;
+    }};
+})();
+
+// ---- BARS ----
+(function(){
+    const N=64, RR=0.5;
+    const bg=new THREE.BoxGeometry(1,1,1); bg.translate(0,0.5,0);
+    const mat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:160});
+    const mesh=new THREE.InstancedMesh(bg,mat,N);
+    const grp=new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
+    const bd=[]; for(let i=0;i<N;i++) bd.push({a:(i/N)*Math.PI*2,h:0});
+    VIZ.bars = { meshes:[grp], mats:[mat], update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let i=0;i<N;i++){const b=bd[i];
+            const bin=Math.floor(i/N*(freqData?freqData.length:128));
+            const raw=freqData?freqData[bin]/255*gain:0;
+            const tgt=Math.min(raw,1.5)*0.8;
+            b.h+=(tgt-b.h)*(tgt>b.h?0.35:0.1);
+            _pos.set(Math.cos(b.a)*RR,0,Math.sin(b.a)*RR);
+            _quat.setFromAxisAngle(_yUp,-b.a+Math.PI/2);
+            _scl.set(0.025,Math.max(b.h,0.005),0.025);
+            _mat4.compose(_pos,_quat,_scl); mesh.setMatrixAt(i,_mat4);}
+        mesh.instanceMatrix.needsUpdate=true;
+        grp.rotation.y+=0.0005; grp.rotation.x=Math.sin(t*0.08)*0.1;
+    }};
+})();
+
+// ---- WAVE ----
+(function(){
+    const SEGS=128, BR=0.5;
+    const geo=new THREE.RingGeometry(BR*0.92,BR*1.08,SEGS,1);
+    const mat=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:180,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(geo,mat);
+    const grp=new THREE.Group(); grp.add(mesh); scene.add(grp); grp.visible=false;
+    const pa=geo.attributes.position;
+    const orig=new Float32Array(pa.array);
+    const vc=pa.count;
+    VIZ.wave = { meshes:[grp], mats:[mat], update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let i=0;i<vc;i++){
+            const ox=orig[i*3],oy=orig[i*3+1];
+            const ang=Math.atan2(oy,ox);
+            const si=((ang+Math.PI)/(Math.PI*2))*(freqData?freqData.length:128);
+            const bin=Math.floor(si)%(freqData?freqData.length:128);
+            const raw=freqData?freqData[bin]/255*gain:0;
+            pa.setZ(i,Math.min(raw,1.5)*0.3);}
+        pa.needsUpdate=true; geo.computeVertexNormals();
+        grp.rotation.z+=0.0008;
+        grp.rotation.x=0.4+Math.sin(t*0.1)*0.05;
+        grp.rotation.y=Math.sin(t*0.07)*0.1;
+    }};
+})();
+
+// ---- HELIX ----
+(function(){
+    const PS=60,HR=0.35,HH=1.8,TU=3;
+    const sg=new THREE.SphereGeometry(1,8,8);
+    const mA=new THREE.MeshPhongMaterial({color:0x080810,specular:0x999aaa,shininess:160});
+    const mB=new THREE.MeshPhongMaterial({color:0x100810,specular:0x9999bb,shininess:160});
+    const iA=new THREE.InstancedMesh(sg,mA,PS);
+    const iB=new THREE.InstancedMesh(sg,mB,PS);
+    const grp=new THREE.Group(); grp.add(iA); grp.add(iB); scene.add(grp); grp.visible=false;
+    const bk=['bass','lowMid','mid','highMid','high'];
+    const hd=[]; for(let i=0;i<PS;i++) hd.push({h:0});
+    VIZ.helix = { meshes:[grp], mats:[mA,mB], update(t,bands){
+        const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
+        for(let i=0;i<PS;i++){const p=i/PS;
+            const bVal=bands[bk[Math.min(Math.floor(p*5),4)]];
+            const d=hd[i]; d.h+=(0.015+bVal*0.025-d.h)*0.15;
+            const ang=p*TU*Math.PI*2+t*0.3;
+            const y=(p-0.5)*HH, hr=HR+bVal*0.12;
+            _pos.set(Math.cos(ang)*hr,y,Math.sin(ang)*hr);
+            _scl.setScalar(d.h); _mat4.compose(_pos,_quat.identity(),_scl);
+            iA.setMatrixAt(i,_mat4);
+            _pos.set(Math.cos(ang+Math.PI)*hr,y,Math.sin(ang+Math.PI)*hr);
+            _mat4.compose(_pos,_quat.identity(),_scl);
+            iB.setMatrixAt(i,_mat4);}
+        iA.instanceMatrix.needsUpdate=true;
+        iB.instanceMatrix.needsUpdate=true;
+        grp.rotation.y+=0.002+Math.min(en,0.5)*0.005;
+    }};
+})();
+
+// ================================================================
+//  VIZ MODE COORDINATOR
+// ================================================================
+function switchVizMode(mode) {
+    if(mode===currentVizMode||!VIZ[mode]) return;
+    VIZ[currentVizMode].meshes.forEach(m=>m.visible=false);
+    VIZ[mode].meshes.forEach(m=>m.visible=true);
+    activeVizUpdate=VIZ[mode].update;
+    currentVizMode=mode;
+    const th=THEMES[currentTheme];
+    VIZ[mode].mats.forEach(m=>{
+        m.color.setRGB(th.liquid[0]+0.02,th.liquid[1]+0.02,th.liquid[2]+0.02);
+        m.specular.setRGB(th.specular[0]*0.7,th.specular[1]*0.7,th.specular[2]*0.7);
+    });
+    document.querySelectorAll('.viz-btn').forEach(b=>
+        b.classList.toggle('active',b.dataset.viz===mode));
+}
+activeVizUpdate = VIZ.spikes.update;
+document.querySelectorAll('.viz-btn').forEach(btn=>
+    btn.addEventListener('click',()=>switchVizMode(btn.dataset.viz)));
 
 // ---- GLOW DISC (backlight behind blob) ----
 function createGlowTexture() {
@@ -693,13 +790,13 @@ const targetLiquid = new THREE.Color();
 const targetSpec = new THREE.Color();
 let targetIri = 0.2;
 
-// Initialize theme
+// Initialize theme — apply to all viz modes
 setTheme(currentTheme);
 currentBg.copy(targetBg);
-coreMat.color.copy(targetLiquid);
-coreMat.specular.copy(targetSpec);
-spikeMat.color.copy(targetLiquid);
-spikeMat.specular.copy(targetSpec);
+Object.values(VIZ).forEach(v => v.mats.forEach(m => {
+    m.color.copy(targetLiquid);
+    m.specular.copy(targetSpec);
+}));
 glowMat.color.copy(targetGlow);
 
 // ---- AUDIO ENGINE ----
@@ -961,18 +1058,19 @@ function animate() {
     // Update audio
     updateAudioData();
 
-    // Update spikes
-    updateSpikes(t, bands);
+    // Update active visualization mode
+    if (activeVizUpdate) activeVizUpdate(t, bands);
 
-    // Smooth theme transitions
+    // Smooth theme transitions (background + active mode materials)
     currentBg.lerp(targetBg, 0.04);
     renderer.setClearColor(currentBg);
-    coreMat.color.lerp(targetLiquid, 0.04);
-    coreMat.specular.lerp(targetSpec, 0.04);
-    spikeMat.color.lerp(targetLiquid, 0.04);
-    spikeMat.specular.lerp(targetSpec, 0.04);
+    const vizMats = VIZ[currentVizMode] ? VIZ[currentVizMode].mats : [];
+    vizMats.forEach(m => {
+        m.color.lerp(targetLiquid, 0.04);
+        m.specular.lerp(targetSpec, 0.04);
+    });
 
-    // Total energy for reactive effects
+    // Total energy for glow
     const totalEnergy = (bands.bass + bands.lowMid + bands.mid + bands.highMid + bands.high) / 5;
 
     // Glow: smooth color transition + audio pulse
@@ -982,12 +1080,6 @@ function animate() {
         const glowScale = 4.0 + totalEnergy * 3.0;
         glowSprite.scale.set(glowScale, glowScale, 1);
     }
-
-    // ---- ORGANISM MOTION ----
-    const cappedEnergy = Math.min(totalEnergy, 0.5);
-    organism.rotation.y += 0.0008 + cappedEnergy * 0.004;
-    organism.rotation.x = Math.sin(t * 0.12) * 0.02;
-    organism.rotation.z = Math.cos(t * 0.1) * 0.015;
 
     // Update orbit camera
     orbit.update();
