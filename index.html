@@ -293,6 +293,27 @@
             letter-spacing: 1.5px; font-weight: 600;
         }
 
+        /* Auto transition button */
+        .auto-btn {
+            padding: 6px 12px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.5);
+            font-size: 11px; font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            cursor: pointer; outline: none;
+            transition: all 0.25s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .auto-btn.active {
+            border-color: #44cc66;
+            background: rgba(68,204,102,0.2);
+            color: #fff;
+            animation: pulse-glow-green 1.5s ease-in-out infinite;
+        }
+
         /* Viz dropdown */
         .viz-select {
             -webkit-appearance: none; appearance: none;
@@ -447,6 +468,7 @@
     </div>
     <div class="ctrl-group">
         <span class="gain-label">Style</span>
+        <button class="auto-btn" id="autoBtn" title="Auto-transition between styles">Auto</button>
         <select id="vizSelect" class="viz-select">
             <option value="spikes">Spikes</option>
             <option value="blob">Blob</option>
@@ -1184,8 +1206,40 @@ function switchVizMode(mode) {
     document.getElementById('vizSelect').value = mode;
 }
 activeVizUpdate = VIZ.spikes.update;
-document.getElementById('vizSelect').addEventListener('change', e =>
-    switchVizMode(e.target.value));
+document.getElementById('vizSelect').addEventListener('change', e => {
+    stopAutoTransition();
+    switchVizMode(e.target.value);
+});
+
+// ---- AUTO TRANSITION ----
+let autoInterval = null;
+const vizKeys = Object.keys(VIZ);
+
+function startAutoTransition() {
+    if (autoInterval) return;
+    autoInterval = setInterval(() => {
+        let next;
+        do { next = vizKeys[Math.floor(Math.random() * vizKeys.length)]; }
+        while (next === currentVizMode && vizKeys.length > 1);
+        switchVizMode(next);
+    }, 10000); // switch every 10 seconds
+    document.getElementById('autoBtn').classList.add('active');
+    // Do an immediate first switch
+    let next;
+    do { next = vizKeys[Math.floor(Math.random() * vizKeys.length)]; }
+    while (next === currentVizMode && vizKeys.length > 1);
+    switchVizMode(next);
+}
+
+function stopAutoTransition() {
+    if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
+    document.getElementById('autoBtn').classList.remove('active');
+}
+
+document.getElementById('autoBtn').addEventListener('click', () => {
+    if (autoInterval) stopAutoTransition();
+    else startAutoTransition();
+});
 
 // ---- GLOW DISC (backlight behind blob) ----
 function createGlowTexture() {
