@@ -481,45 +481,53 @@ float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, fl
     // Without this, noise barely varies on tiny r=0.12 sphere.
     vec3 np = normalize(pos);
 
-    // Rotate noise space — spikes dance around the surface
-    float ra = t * 0.12 + energy * 0.15;
+    // Rotate noise space — slow organic drift
+    float ra = t * 0.04 + energy * 0.06;
     float rc = cos(ra), rs = sin(ra);
     vec3 rp = vec3(np.x*rc - np.z*rs, np.y, np.x*rs + np.z*rc);
 
     // Nearly perfect sphere at rest
-    float d = snoise(rp * 3.0 + t * 0.03) * 0.0008;
+    float d = snoise(rp * 3.0 + t * 0.02) * 0.0005;
 
     // === THIN SPIKE LAYERS ===
-    // Higher freq on unit sphere = more, thinner spikes.
-    // freq 6 ≈ 6 spikes around equator, freq 20 ≈ 20 spikes.
+    // Many layers at high frequencies for dense spider-like spikes.
+    // All time speeds SLOW for organic feel.
 
-    // Primary spikes (bass) — tallest, few
-    float s1 = pow(max(snoise(rp * 6.0 + t * 0.05 + 10.0), 0.0), 5.0);
-    d += s1 * bass * 0.14;
+    // Large primary spikes (bass) — tallest legs
+    float s1 = pow(max(snoise(rp * 7.0 + t * 0.02 + 10.0), 0.0), 4.0);
+    d += s1 * bass * 0.22;
 
-    // Secondary spikes (low-mid)
-    float s2 = pow(max(snoise(rp * 8.0 + t * 0.07 + 20.0), 0.0), 5.0);
-    d += s2 * lowMid * 0.11;
+    // Secondary spikes (bass+low-mid)
+    float s2 = pow(max(snoise(rp * 10.0 + t * 0.025 + 20.0), 0.0), 4.0);
+    d += s2 * lowMid * 0.18;
 
-    // Dense thin spikes (mid)
-    float s3 = pow(max(snoise(rp * 11.0 + t * 0.09 + 30.0), 0.0), 6.0);
-    d += s3 * mid * 0.11;
+    // Dense thin spikes (mid) — many legs
+    float s3 = pow(max(snoise(rp * 13.0 + t * 0.03 + 30.0), 0.0), 5.0);
+    d += s3 * mid * 0.16;
 
-    // Fill spikes (mid+high-mid)
-    float s4 = pow(max(snoise(rp * 14.0 + t * 0.08 + 70.0), 0.0), 6.0);
-    d += s4 * (mid + highMid) * 0.045;
+    // More mid spikes — fills in gaps
+    float s4 = pow(max(snoise(rp * 16.0 + t * 0.028 + 70.0), 0.0), 5.0);
+    d += s4 * mid * 0.10;
 
     // Thin thorns (high-mid)
-    float s5 = pow(max(snoise(rp * 18.0 + t * 0.12 + 40.0), 0.0), 7.0);
-    d += s5 * highMid * 0.09;
+    float s5 = pow(max(snoise(rp * 20.0 + t * 0.035 + 40.0), 0.0), 5.0);
+    d += s5 * highMid * 0.13;
+
+    // Extra thorn layer
+    float s6 = pow(max(snoise(rp * 24.0 + t * 0.032 + 90.0), 0.0), 6.0);
+    d += s6 * highMid * 0.08;
 
     // Fine needles (highs)
-    float s6 = pow(max(snoise(rp * 24.0 + t * 0.16 + 50.0), 0.0), 8.0);
-    d += s6 * high * 0.07;
+    float s7 = pow(max(snoise(rp * 30.0 + t * 0.04 + 50.0), 0.0), 6.0);
+    d += s7 * high * 0.10;
 
-    // Splinters — ultra-fine
-    float s7 = pow(max(snoise(rp * 32.0 + t * 0.22 + 60.0), 0.0), 9.0);
-    d += s7 * high * 0.04;
+    // More needles
+    float s8 = pow(max(snoise(rp * 36.0 + t * 0.038 + 80.0), 0.0), 7.0);
+    d += s8 * high * 0.06;
+
+    // Ultra-fine splinters
+    float s9 = pow(max(snoise(rp * 44.0 + t * 0.045 + 60.0), 0.0), 7.0);
+    d += s9 * high * 0.04;
 
     return d;
 }
@@ -531,11 +539,10 @@ void main(){
 
     float disp = getDisplacement(pos, t, uBass, uLowMid, uMid, uHighMid, uHigh);
 
-    // Separation effect: spikes lift off the surface when loud,
-    // snap back when quiet — like pieces breaking away and returning
+    // Separation: spikes detach from core when loud, snap back when quiet
     float energy = uBass + uLowMid + uMid + uHighMid + uHigh;
-    float liftFactor = smoothstep(0.003, 0.03, disp); // 0 on sphere, 1 on spikes
-    float separation = liftFactor * min(energy, 2.5) * 0.04;
+    float liftFactor = smoothstep(0.001, 0.01, disp);
+    float separation = liftFactor * min(energy, 2.0) * 0.06;
     disp += separation;
 
     vec3 displaced = pos + nrm * disp;
@@ -655,7 +662,7 @@ const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
 // ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(0.12, 7);
+const geo = new THREE.IcosahedronGeometry(0.05, 7);
 
 const uniforms = {
     uTime:      { value: 0 },
@@ -744,7 +751,7 @@ const orbit = {
         this.targetDist = Math.max(1.5, Math.min(8, this.targetDist));
     },
     update() {
-        if (!this.dragging) this.targetRotY += 0.0015; // auto-rotate
+        if (!this.dragging) this.targetRotY += 0.0006; // slow auto-rotate
         this.rotX += (this.targetRotX - this.rotX) * 0.08;
         this.rotY += (this.targetRotY - this.rotY) * 0.08;
         this.dist += (this.targetDist - this.dist) * 0.08;
@@ -1134,12 +1141,12 @@ function animate() {
     }
 
     // ---- BLOB ORGANISM MOTION ----
-    // Gentle spin — capped so gain doesn't make it tornado
-    const cappedEnergy = Math.min(totalEnergy, 0.6);
-    blob.rotation.y += 0.003 + cappedEnergy * 0.02;
-    // Tilt/sway based on frequency balance — feels alive
-    blob.rotation.x = Math.sin(t * 0.35) * 0.04 + Math.min(bands.bass - bands.high, 0.3) * 0.15;
-    blob.rotation.z = Math.cos(t * 0.28) * 0.03 + Math.min(bands.lowMid - bands.highMid, 0.3) * 0.08;
+    // Very slow organic spin
+    const cappedEnergy = Math.min(totalEnergy, 0.5);
+    blob.rotation.y += 0.001 + cappedEnergy * 0.006;
+    // Gentle tilt/sway
+    blob.rotation.x = Math.sin(t * 0.15) * 0.03 + Math.min(bands.bass - bands.high, 0.2) * 0.08;
+    blob.rotation.z = Math.cos(t * 0.12) * 0.02 + Math.min(bands.lowMid - bands.highMid, 0.2) * 0.05;
     // Gentle bobbing
     blob.position.y = Math.sin(t * 0.5) * 0.04;
 
