@@ -45,9 +45,25 @@
             transition: opacity 0.5s;
         }
 
+        /* Fullscreen button */
+        #fsBtn {
+            position: fixed; top: 16px; right: 16px;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.25);
+            background: rgba(0,0,0,0.25);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer; z-index: 12;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            outline: none; transition: all 0.2s;
+        }
+        #fsBtn:active { transform: scale(0.9); }
+
         /* Persistent menu toggle button — always visible */
         #menuBtn {
-            position: fixed; top: 16px; right: 60px;
+            position: fixed; top: 16px; right: 62px;
             width: 40px; height: 40px;
             border-radius: 50%;
             border: 1.5px solid rgba(255,255,255,0.25);
@@ -363,7 +379,8 @@
             .ctrl-group { padding: 6px 10px; }
             .btn { width: 42px; height: 42px; }
             .theme-btn { width: 28px; height: 28px; }
-            #menuBtn { top: 10px; right: 14px; width: 36px; height: 36px; }
+            #fsBtn { top: 10px; right: 10px; width: 34px; height: 34px; }
+            #menuBtn { top: 10px; right: 50px; width: 36px; height: 36px; }
             #title { font-size: 9px; top: 14px; left: 16px; }
             #status { top: 14px; right: 56px; font-size: 10px; }
         }
@@ -374,6 +391,11 @@
 <div id="vignette"></div>
 <div id="frame"><div id="frame-mask"></div><div id="frame-ring"></div></div>
 <div id="title">KINETIC ALIEN</div>
+<button id="fsBtn" title="Fullscreen">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+    </svg>
+</button>
 <button id="menuBtn" title="Toggle Controls">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
@@ -1286,6 +1308,16 @@ function toggleControls() {
 document.getElementById('menuBtn').addEventListener('click', e => {
     e.stopPropagation();
     toggleControls();
+});
+
+// Fullscreen toggle
+document.getElementById('fsBtn').addEventListener('click', () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const el = document.documentElement;
+        (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } else {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
 });
 
 // ---- THEME SYSTEM ----
