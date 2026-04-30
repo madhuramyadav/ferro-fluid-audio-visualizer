@@ -871,32 +871,82 @@ let activeVizUpdate = null;
     }};
 })();
 
-// ---- HEARTBEAT ----
+// ---- HEARTBEAT (3D heart + ECG ring) ----
 (function(){
-    const geo=new THREE.SphereGeometry(0.35,32,32);
-    const mat=new THREE.MeshPhongMaterial({color:0x181820,specular:0xbbbbcc,shininess:200,emissive:0x0a0a12,emissiveIntensity:0.3});
-    const mesh=new THREE.Mesh(geo,mat);
-    // Inner glow sphere
-    const glowGeo=new THREE.SphereGeometry(0.37,16,16);
-    const glowMat=new THREE.MeshBasicMaterial({color:0x334466,transparent:true,opacity:0.08});
-    const glowMesh=new THREE.Mesh(glowGeo,glowMat);
-    const grp=new THREE.Group(); grp.add(mesh); grp.add(glowMesh); scene.add(grp); grp.visible=false;
-    let curScale=1;
-    VIZ.heartbeat={meshes:[grp],mats:[mat,glowMat],update(t,bands){
+    // 3D Heart shape using parametric equation
+    const heartShape=new THREE.Shape();
+    const hpts=[];
+    for(let i=0;i<=60;i++){
+        const a=(i/60)*Math.PI*2;
+        const x=16*Math.pow(Math.sin(a),3);
+        const y=13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a);
+        hpts.push(new THREE.Vector2(x*0.012,y*0.012));
+    }
+    heartShape.setFromPoints(hpts);
+    const heartGeo=new THREE.ExtrudeGeometry(heartShape,{depth:0.06,bevelEnabled:true,bevelThickness:0.015,bevelSize:0.015,bevelSegments:3});
+    heartGeo.center();
+    const heartMat=new THREE.MeshPhongMaterial({color:0x880020,specular:0xff4466,shininess:160,emissive:0x220008,emissiveIntensity:0.3});
+    const heartMesh=new THREE.Mesh(heartGeo,heartMat);
+
+    // ECG ring — circular line that deforms with audio
+    const ECG_N=200, ECG_R=0.45;
+    const ecgGeo=new THREE.BufferGeometry();
+    const ecgPos=new Float32Array((ECG_N+1)*3);
+    for(let i=0;i<=ECG_N;i++){
+        const a=(i/ECG_N)*Math.PI*2;
+        ecgPos[i*3]=Math.cos(a)*ECG_R;
+        ecgPos[i*3+1]=Math.sin(a)*ECG_R;
+        ecgPos[i*3+2]=0;
+    }
+    ecgGeo.setAttribute('position',new THREE.BufferAttribute(ecgPos,3));
+    const ecgMat=new THREE.LineBasicMaterial({color:0x44ff66,linewidth:2});
+    const ecgLine=new THREE.LineLoop(ecgGeo,ecgMat);
+
+    const grp=new THREE.Group();
+    grp.add(heartMesh); grp.add(ecgLine);
+    scene.add(grp); grp.visible=false;
+    let curScale=1, ecgOffset=0;
+    // Store ECG waveform buffer
+    const ecgWave=new Float32Array(ECG_N); ecgWave.fill(0);
+
+    VIZ.heartbeat={meshes:[grp],mats:[heartMat,ecgMat],update(t,bands){
         const en=(bands.bass+bands.lowMid+bands.mid+bands.highMid+bands.high)/5;
         const beat=Math.min(bands.bass,0.8);
-        // Always-visible heartbeat pump (even without audio)
-        const ambientBeat=Math.pow(Math.max(Math.sin(t*2.5),0),4)*0.1;
-        const pump1=Math.pow(Math.max(Math.sin(t*4+beat*3),0),3)*0.2;
-        const pump2=Math.pow(Math.max(Math.sin(t*4+beat*3+0.7),0),5)*0.1;
-        const target=1+beat*0.35+pump1+pump2+ambientBeat;
-        curScale+=(Math.min(target,1.6)-curScale)*0.2;
-        mesh.scale.set(curScale*(1+beat*0.04),curScale*(1-beat*0.06),curScale);
-        glowMesh.scale.setScalar(curScale*1.05);
-        glowMat.opacity=0.05+en*0.15;
-        mat.emissiveIntensity=0.2+en*0.4;
+
+        // Heart pulse
+        const ambPump=Math.pow(Math.max(Math.sin(t*2.5),0),4)*0.08;
+        const pump=Math.pow(Math.max(Math.sin(t*4+beat*3),0),3)*0.2;
+        const target=1+beat*0.3+pump+ambPump;
+        curScale+=(Math.min(target,1.5)-curScale)*0.25;
+        heartMesh.scale.set(curScale*(1+beat*0.05),curScale*(1-beat*0.05),curScale);
+        heartMat.emissiveIntensity=0.2+beat*0.6;
+
+        // ECG waveform — scroll and inject audio peaks
+        ecgOffset=(ecgOffset+1)%ECG_N;
+        // Inject current audio as ECG spike at write position
+        const spike=en*1.5+beat*2.0;
+        // QRS-like pattern: sharp up, sharp down, settle
+        ecgWave[ecgOffset]=spike*0.15;
+        ecgWave[(ecgOffset+1)%ECG_N]=-spike*0.04;
+        ecgWave[(ecgOffset+2)%ECG_N]=spike*0.02;
+        // Decay old values
+        for(let i=0;i<ECG_N;i++){
+            if(i!==ecgOffset&&i!==(ecgOffset+1)%ECG_N&&i!==(ecgOffset+2)%ECG_N)
+                ecgWave[i]*=0.96;
+        }
+
+        // Update ECG ring positions
+        const pa=ecgGeo.attributes.position;
+        for(let i=0;i<=ECG_N;i++){
+            const idx=i%ECG_N;
+            const a=(i/ECG_N)*Math.PI*2;
+            const r=ECG_R+ecgWave[idx];
+            pa.setXYZ(i, Math.cos(a)*r, Math.sin(a)*r, 0);
+        }
+        pa.needsUpdate=true;
+
         grp.rotation.y+=0.0005;
-        grp.position.y=Math.sin(t*0.3)*0.02;
+        grp.rotation.x=Math.sin(t*0.15)*0.03;
     }};
 })();
 
