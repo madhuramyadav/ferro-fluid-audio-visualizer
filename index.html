@@ -1128,18 +1128,21 @@ void main(){
 
 // ---- LIQUID GRADIENT ----
 _shaderMode('liquid', `uniform float uTime,uBass,uMid,uHigh,uEnergy;
-varying vec2 vUv; varying vec3 vNrm;
+varying vec2 vUv;
 void main(){
-    vec3 n=normalize(vNrm); float t=uTime*0.06;
-    float flow=sin(n.x*3.0+t)*cos(n.y*2.5-t*0.7)+sin(n.z*4.0+t*0.5);
+    vec2 p=vUv*2.0-1.0; float t=uTime*0.06;
+    float flow=sin(p.x*3.0+t)*cos(p.y*2.5-t*0.7)+sin((p.x+p.y)*2.0+t*0.5);
     flow=flow*0.5+0.5;
-    flow+=uBass*0.2*sin(n.y*5.0+uTime*0.2);
-    flow+=uMid*0.15*cos(n.x*6.0-uTime*0.15);
-    flow+=uHigh*0.1*sin((n.x+n.z)*8.0+uTime*0.3);
+    flow+=uBass*0.2*sin(p.y*5.0+uTime*0.2);
+    flow+=uMid*0.15*cos(p.x*6.0-uTime*0.15);
+    flow+=uHigh*0.1*sin((p.x+p.y)*4.0+uTime*0.3);
+    float dist=length(p);
+    float blob=1.0-smoothstep(0.6,1.2,dist);
     vec3 col=0.5+0.5*cos(6.28*(flow*1.5+vec3(0.0,0.1,0.2)));
-    float fres=pow(1.0-abs(dot(n,vec3(0,0,1))),2.0);
-    col+=fres*vec3(0.15,0.08,0.25)*(0.5+uEnergy);
-    col*=0.45+uEnergy*0.6;
+    float edge=smoothstep(0.3,0.9,dist);
+    col+=edge*vec3(0.15,0.08,0.25)*(0.5+uEnergy);
+    col*=(0.45+uEnergy*0.6)*blob;
+    col+=vec3(0.01);
     gl_FragColor=vec4(col,1.0);}`);
 
 // ================================================================
