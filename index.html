@@ -436,8 +436,8 @@ const coreMat = new THREE.MeshPhongMaterial({
 const core = new THREE.Mesh(coreGeo, coreMat);
 
 // ---- SPIKE SYSTEM (instanced thin cones) ----
-const SPIKE_COUNT = 256;
-const spikeGeo = new THREE.ConeGeometry(1, 1, 5);
+const SPIKE_COUNT = 180;
+const spikeGeo = new THREE.ConeGeometry(1, 1, 4);
 spikeGeo.translate(0, 0.5, 0); // base at origin, tip at y=1
 
 const spikeMat = new THREE.MeshPhongMaterial({
@@ -462,10 +462,11 @@ for (let i = 0; i < SPIKE_COUNT; i++) {
         dir,
         bandIndex: Math.floor(Math.random() * 5),
         phase: Math.random() * Math.PI * 2,
-        speed: 0.3 + Math.random() * 0.7,
-        sensitivity: 0.6 + Math.random() * 0.8,
-        baseHeight: 0.005 + Math.random() * 0.01,
-        thickness: 0.0015 + Math.random() * 0.002
+        speed: 0.2 + Math.random() * 0.5,
+        sensitivity: 0.5 + Math.random() * 1.5,
+        threshold: 0.04 + Math.random() * 0.18, // activation threshold — different per spike
+        thickness: 0.0012 + Math.random() * 0.0018,
+        currentHeight: 0 // for smooth interpolation
     });
 }
 
@@ -485,33 +486,43 @@ function updateSpikes(t, bands) {
     const bandValues = [bands.bass, bands.lowMid, bands.mid, bands.highMid, bands.high];
     const energy = (bands.bass + bands.lowMid + bands.mid + bands.highMid + bands.high) / 5;
 
+    // Separation gap: spikes detach from core when loud
+    const gap = Math.min(energy, 0.5) * 0.12;
+
     for (let i = 0; i < SPIKE_COUNT; i++) {
         const s = spikeData[i];
 
-        // Audio amplitude for this spike's frequency band
-        const amp = bandValues[s.bandIndex] * s.sensitivity;
+        // Audio amplitude — only above this spike's threshold (filters noise floor)
+        const rawAmp = bandValues[s.bandIndex];
+        const amp = Math.max(rawAmp - s.threshold, 0) * s.sensitivity;
 
-        // Slow organic pulse (always alive)
-        const pulse = Math.sin(t * s.speed * 0.4 + s.phase) * 0.5 + 0.5;
+        // Subtle ambient breathing (barely visible nubs at rest)
+        const ambientPulse = Math.sin(t * s.speed * 0.3 + s.phase) * 0.5 + 0.5;
+        const ambientH = 0.004 * ambientPulse;
 
-        // Spike height: ambient breathing + audio-reactive
-        const height = s.baseHeight * (0.3 + pulse * 0.7) + amp * 0.35;
+        // Target height: audio-driven + tiny ambient
+        const targetHeight = Math.max(amp * 0.35, ambientH);
 
-        // Thickness: slightly thicker with more audio
-        const thick = s.thickness * (1 + amp * 0.5);
+        // Smooth interpolation — organic growth and shrink
+        s.currentHeight += (targetHeight - s.currentHeight) * 0.1;
+        const height = s.currentHeight;
 
-        // Separation: gap between core and spike base when loud
-        const gap = Math.min(energy, 0.6) * 0.06;
-        const startRadius = CORE_RADIUS + gap;
-
-        // Position spike at surface + gap
-        _pos.copy(s.dir).multiplyScalar(startRadius);
-
-        // Orient cone to point outward along spike direction
+        // Orient cone outward
         _quat.setFromUnitVectors(yUp, s.dir);
 
-        // Scale: x/z = thickness, y = height
-        _scl.set(thick, Math.max(height, 0.001), thick);
+        if (height < 0.001) {
+            // Spike invisible — hide it
+            _scl.set(0, 0, 0);
+            _pos.set(0, 0, 0);
+        } else {
+            // Thickness scales slightly with height
+            const thick = s.thickness * (0.6 + height * 3.0);
+
+            // Position: core surface + gap
+            const startR = CORE_RADIUS + (height > 0.005 ? gap : 0);
+            _pos.copy(s.dir).multiplyScalar(startR);
+            _scl.set(thick, height, thick);
+        }
 
         _mat4.compose(_pos, _quat, _scl);
         spikeMesh.setMatrixAt(i, _mat4);
