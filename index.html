@@ -863,18 +863,33 @@ async function showSourceSelector() {
         document.getElementById('warning').style.display = 'block';
         return;
     }
-    // If mic is active, stop it
     if (audioState === 'mic') { stopMic(); return; }
 
+    const popup = document.getElementById('sourcePopup');
+    // Clear old items (keep title)
+    popup.querySelectorAll('.source-item,.source-divider,.source-hint').forEach(el => el.remove());
+
+    // Tab/System Audio option (Chrome/Edge only — getDisplayMedia)
+    if (navigator.mediaDevices.getDisplayMedia) {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'source-item';
+        tabBtn.innerHTML = '&#127925; Tab / System Audio';
+        tabBtn.addEventListener('click', () => {
+            popup.classList.remove('visible');
+            startTabAudio();
+        });
+        popup.appendChild(tabBtn);
+
+        const div = document.createElement('div');
+        div.className = 'source-divider';
+        div.style.cssText = 'height:1px;background:rgba(255,255,255,0.1);margin:6px 12px;';
+        popup.appendChild(div);
+    }
+
     try {
-        // Request permission first (needed to enumerate devices)
         await navigator.mediaDevices.getUserMedia({ audio: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
-
-        const popup = document.getElementById('sourcePopup');
-        // Clear old items (keep title)
-        popup.querySelectorAll('.source-item').forEach(el => el.remove());
 
         audioInputs.forEach(dev => {
             const btn = document.createElement('button');
@@ -890,15 +905,62 @@ async function showSourceSelector() {
         if (audioInputs.length === 0) {
             const msg = document.createElement('div');
             msg.className = 'source-item';
-            msg.textContent = 'No audio inputs found';
+            msg.textContent = 'No microphones found';
             popup.appendChild(msg);
         }
 
-        popup.classList.toggle('visible');
+        // Hint about Stereo Mix
+        const hint = document.createElement('div');
+        hint.className = 'source-hint';
+        hint.style.cssText = 'padding:8px 16px 4px;color:rgba(255,255,255,0.25);font-size:10px;line-height:1.4;';
+        hint.textContent = 'Tip: Enable "Stereo Mix" in Windows Sound settings to capture system audio as a mic input.';
+        popup.appendChild(hint);
+
     } catch (e) {
         console.warn('Cannot enumerate devices:', e);
-        // Fallback: just start with default mic
         startMicWithDevice(null);
+        return;
+    }
+
+    popup.classList.toggle('visible');
+}
+
+async function startTabAudio() {
+    try {
+        initAudio();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        stopFile();
+        stopMic();
+
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+        });
+
+        // Stop the video track — we only need audio
+        stream.getVideoTracks().forEach(t => t.stop());
+
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            document.getElementById('status').textContent = 'No audio in selected source';
+            setTimeout(() => { if (audioState === 'idle') document.getElementById('status').textContent = ''; }, 3000);
+            return;
+        }
+
+        micStream = stream;
+        micSource = audioCtx.createMediaStreamSource(stream);
+        micSource.connect(analyser);
+
+        audioState = 'mic';
+        document.getElementById('micBtn').classList.add('active');
+        document.getElementById('micLabel').textContent = 'Mic On';
+        document.getElementById('status').textContent = 'Tab Audio';
+        document.getElementById('levelMeter').classList.add('visible');
+
+        // When user stops sharing
+        audioTracks[0].addEventListener('ended', () => stopMic());
+    } catch (e) {
+        console.warn('Tab audio capture cancelled:', e);
     }
 }
 
