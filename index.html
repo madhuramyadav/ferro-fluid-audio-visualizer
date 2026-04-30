@@ -45,6 +45,23 @@
             transition: opacity 0.5s;
         }
 
+        /* Persistent menu toggle button — always visible */
+        #menuBtn {
+            position: fixed; top: 16px; right: 60px;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.25);
+            background: rgba(0,0,0,0.25);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer; z-index: 12;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            outline: none; transition: all 0.2s;
+        }
+        #menuBtn:active { transform: scale(0.9); }
+        #menuBtn.open { border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.15); }
+
         #fileName {
             position: fixed; bottom: 90px;
             left: 50%; transform: translateX(-50%);
@@ -336,10 +353,19 @@
             #frame-ring { width: 56.6vw; height: 56.6vw; }
         }
 
-        /* Responsive: stack on very small screens */
-        @media (max-width: 500px) {
-            #controls { flex-wrap: wrap; gap: 8px; }
+        /* Responsive: portrait + small screens */
+        @media (max-width: 700px), (orientation: portrait) {
+            #controls {
+                flex-wrap: wrap; gap: 6px;
+                padding: 10px 12px 18px;
+                justify-content: center;
+            }
             .ctrl-group { padding: 6px 10px; }
+            .btn { width: 42px; height: 42px; }
+            .theme-btn { width: 28px; height: 28px; }
+            #menuBtn { top: 10px; right: 14px; width: 36px; height: 36px; }
+            #title { font-size: 9px; top: 14px; left: 16px; }
+            #status { top: 14px; right: 56px; font-size: 10px; }
         }
     </style>
 </head>
@@ -348,6 +374,11 @@
 <div id="vignette"></div>
 <div id="frame"><div id="frame-mask"></div><div id="frame-ring"></div></div>
 <div id="title">KINETIC ALIEN</div>
+<button id="menuBtn" title="Toggle Controls">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+</button>
 <div id="status"></div>
 <div id="levelMeter"><div id="levelBar"></div></div>
 <div id="fileName"></div>
@@ -1116,7 +1147,7 @@ const orbit = {
 // Mouse events
 renderer.domElement.addEventListener('mousedown', e => { orbit.start(e.clientX, e.clientY); });
 window.addEventListener('mousemove', e => { orbit.move(e.clientX, e.clientY); });
-window.addEventListener('mouseup', () => { if (orbit.end()) toggleControls(); });
+window.addEventListener('mouseup', () => { orbit.end(); });
 renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); orbit.zoom(e.deltaY); }, { passive: false });
 
 // Touch events
@@ -1143,28 +1174,20 @@ renderer.domElement.addEventListener('touchmove', e => {
     }
 }, { passive: false });
 
-renderer.domElement.addEventListener('touchend', () => { if (orbit.end()) toggleControls(); });
+renderer.domElement.addEventListener('touchend', () => { orbit.end(); });
 
 // ---- UI CONTROLS VISIBILITY ----
-let hideTimer = null;
-function showControls() {
-    document.getElementById('controls').classList.remove('hidden');
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => document.getElementById('controls').classList.add('hidden'), 5000);
-}
+let controlsOpen = true;
 function toggleControls() {
-    const ctrl = document.getElementById('controls');
-    if (ctrl.classList.contains('hidden')) { showControls(); }
-    else { clearTimeout(hideTimer); ctrl.classList.add('hidden'); }
+    controlsOpen = !controlsOpen;
+    document.getElementById('controls').classList.toggle('hidden', !controlsOpen);
+    document.getElementById('menuBtn').classList.toggle('open', controlsOpen);
 }
-// Keep controls visible while interacting
-document.getElementById('controls').addEventListener('pointerdown', () => {
-    clearTimeout(hideTimer);
+// Menu button always visible — toggles controls
+document.getElementById('menuBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    toggleControls();
 });
-document.getElementById('controls').addEventListener('pointerup', () => {
-    hideTimer = setTimeout(() => document.getElementById('controls').classList.add('hidden'), 5000);
-});
-showControls();
 
 // ---- THEME SYSTEM ----
 const themeGroup = document.getElementById('themeGroup');
