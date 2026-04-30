@@ -475,47 +475,51 @@ float snoise(vec3 v){
 
 // Compute displacement at a point (reusable for normal estimation)
 float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, float highMid, float high) {
-    float energy = (bass + lowMid + mid + highMid + high);
+    float energy = bass + lowMid + mid + highMid + high;
 
-    // Rotate noise space so spikes dance around the surface
-    float ra = t * 0.15 + energy * 0.3;
+    // Rotate noise space — spikes dance around the surface
+    float ra = t * 0.12 + energy * 0.2;
     float rc = cos(ra), rs = sin(ra);
     vec3 rp = vec3(pos.x*rc - pos.z*rs, pos.y, pos.x*rs + pos.z*rc);
 
-    // Ambient: nearly perfect sphere at rest
-    float d = snoise(rp * 2.0 + t * 0.06) * 0.004;
+    // Nearly perfect sphere at rest
+    float d = snoise(rp * 2.0 + t * 0.04) * 0.002;
 
-    // Bass: large organic swells
-    float bn = snoise(rp * 1.0 + t * 0.1 + 10.0);
-    d += max(bn, 0.0) * bass * 1.1;
+    // === SPIKE LAYERS ===
+    // pow(max(noise, 0), N) creates thin conical spikes from smooth noise.
+    // Higher N = thinner/sharper. Higher freq = more spikes.
 
-    // Low-mid: medium lobes
-    float lmn = snoise(rp * 2.2 + t * 0.14 + 20.0);
-    d += max(lmn - 0.03, 0.0) * lowMid * 0.9;
+    // Large primary spikes (bass) — tall, moderately thick
+    float s1 = pow(max(snoise(rp * 3.0 + t * 0.07 + 10.0), 0.0), 3.0);
+    d += s1 * bass * 1.4;
 
-    // Mid: many spiky protrusions
-    float mn = snoise(rp * 4.5 + t * 0.2 + 30.0);
-    d += max(mn - 0.03, 0.0) * mid * 1.0;
+    // Medium spikes (low-mid) — many, conical
+    float s2 = pow(max(snoise(rp * 4.5 + t * 0.1 + 20.0), 0.0), 3.5);
+    d += s2 * lowMid * 1.1;
 
-    // Extra mid spikes (density layer)
-    float mn2 = snoise(rp * 6.0 + t * 0.18 + 70.0);
-    d += max(mn2 - 0.06, 0.0) * (mid + highMid) * 0.5;
+    // Dense spikes (mid) — sharp, numerous
+    float s3 = pow(max(snoise(rp * 6.5 + t * 0.14 + 30.0), 0.0), 4.0);
+    d += s3 * mid * 1.0;
 
-    // High-mid: sharp dense spikes
-    float hmn = snoise(rp * 8.0 + t * 0.26 + 40.0);
-    d += pow(max(hmn - 0.05, 0.0), 1.4) * highMid * 0.9;
+    // Extra spike field (mid+high-mid) — fills gaps
+    float s4 = pow(max(snoise(rp * 8.0 + t * 0.12 + 70.0), 0.0), 4.5);
+    d += s4 * (mid + highMid) * 0.45;
 
-    // Highs: fine needles
-    float hn = snoise(rp * 13.0 + t * 0.38 + 50.0);
-    d += pow(max(hn - 0.08, 0.0), 1.8) * high * 0.7;
+    // Sharp thorns (high-mid) — thin, spiny
+    float s5 = pow(max(snoise(rp * 10.0 + t * 0.18 + 40.0), 0.0), 5.0);
+    d += s5 * highMid * 0.8;
 
-    // Ultra-fine texture layer
-    float un = snoise(rp * 18.0 + t * 0.5 + 80.0);
-    d += max(un - 0.15, 0.0) * high * 0.35;
+    // Fine needles (highs) — hair-thin
+    float s6 = pow(max(snoise(rp * 14.0 + t * 0.24 + 50.0), 0.0), 6.0);
+    d += s6 * high * 0.6;
 
-    // Deep valleys — simulate splitting / pinching
-    float valley = snoise(pos * 1.3 + t * 0.1 + 60.0);
-    d += min(valley + 0.35, 0.0) * energy * 0.18;
+    // Splinters (extreme highs) — very fine texture
+    float s7 = pow(max(snoise(rp * 20.0 + t * 0.3 + 60.0), 0.0), 8.0);
+    d += s7 * high * 0.35;
+
+    // Organic swell underneath — gives body to the spike base
+    float swell = max(snoise(rp * 1.5 + t * 0.06 + 80.0), 0.0);
+    d += swell * energy * 0.08;
 
     return d;
 }
@@ -527,13 +531,13 @@ void main(){
 
     float disp = getDisplacement(pos, t, uBass, uLowMid, uMid, uHighMid, uHigh);
 
-    // Sub-bass pulse
-    float pulse = 1.0 + uBass * 0.06;
+    // Sub-bass pulse (subtle — keep core compact)
+    float pulse = 1.0 + uBass * 0.03;
 
     vec3 displaced = pos * pulse + nrm * disp;
 
     // Estimate normal by sampling displacement at offset points
-    float eps = 0.005;
+    float eps = 0.004;
     vec3 tangent = normalize(cross(nrm, nrm.yzx + vec3(0.1, 0.2, 0.3)));
     vec3 bitangent = normalize(cross(nrm, tangent));
     vec3 posT = pos + tangent * eps;
@@ -542,11 +546,15 @@ void main(){
     float dispB = getDisplacement(posB, t, uBass, uLowMid, uMid, uHighMid, uHigh);
     vec3 surfT = posT * pulse + normalize(posT) * dispT;
     vec3 surfB = posB * pulse + normalize(posB) * dispB;
-    vec3 displacedNormal = normalize(cross(surfT - displaced, surfB - displaced));
+    vec3 detailNormal = normalize(cross(surfT - displaced, surfB - displaced));
+
+    // Blend smooth vertex normal with detail normal for wet metallic look
+    vec3 smoothN = nrm;
+    vec3 blendedNormal = normalize(mix(smoothN, detailNormal, 0.75));
 
     vec4 mvPos = modelViewMatrix * vec4(displaced, 1.0);
     vViewPos = mvPos.xyz;
-    vNormal = normalize(normalMatrix * displacedNormal);
+    vNormal = normalize(normalMatrix * blendedNormal);
     vDisp = disp;
 
     gl_Position = projectionMatrix * mvPos;
@@ -643,7 +651,7 @@ const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
 // ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(0.35, 6);
+const geo = new THREE.IcosahedronGeometry(0.25, 7);
 
 const uniforms = {
     uTime:      { value: 0 },
@@ -707,7 +715,7 @@ dirLight.position.set(3, 4, 2);
 scene.add(dirLight);
 
 // ---- SATELLITE DROPLETS ----
-const SAT_COUNT = 10;
+const SAT_COUNT = 14;
 const satellites = [];
 const satGeo = new THREE.IcosahedronGeometry(1, 3);
 const satMat = new THREE.MeshPhongMaterial({
@@ -719,12 +727,12 @@ const satMat = new THREE.MeshPhongMaterial({
 for (let i = 0; i < SAT_COUNT; i++) {
     const sat = new THREE.Mesh(satGeo, satMat);
     sat.userData = {
-        angle: (i / SAT_COUNT) * Math.PI * 2 + Math.random() * 0.6,
-        speed: 0.3 + Math.random() * 0.5,
-        baseRadius: 0.36 + Math.random() * 0.08,
-        tiltX: (Math.random() - 0.5) * Math.PI * 0.7,
-        tiltZ: (Math.random() - 0.5) * Math.PI * 0.3,
-        baseSize: 0.02 + Math.random() * 0.035,
+        angle: (i / SAT_COUNT) * Math.PI * 2 + Math.random() * 0.5,
+        speed: 0.2 + Math.random() * 0.6,
+        baseRadius: 0.26 + Math.random() * 0.06,
+        tiltX: (Math.random() - 0.5) * Math.PI * 0.8,
+        tiltZ: (Math.random() - 0.5) * Math.PI * 0.4,
+        baseSize: 0.008 + Math.random() * 0.02,
         vertPhase: Math.random() * Math.PI * 2
     };
     sat.scale.setScalar(sat.userData.baseSize);
@@ -735,7 +743,7 @@ for (let i = 0; i < SAT_COUNT; i++) {
 // ---- ORBIT CONTROLS ----
 const orbit = {
     rotX: 0.15, rotY: 0, targetRotX: 0.15, targetRotY: 0,
-    dist: 3.2, targetDist: 3.2,
+    dist: 3.5, targetDist: 3.5,
     dragging: false, dragStart: null, hasMoved: false,
     lastX: 0, lastY: 0, pinchDist: 0,
 
@@ -1172,7 +1180,7 @@ function animate() {
         d.angle += d.speed * (0.25 + totalEnergy * 5.0) * 0.016;
 
         // Orbit radius: merged when quiet, fly apart when loud
-        const radius = d.baseRadius + totalEnergy * 0.6 + bands.bass * 0.35;
+        const radius = d.baseRadius + totalEnergy * 0.5 + bands.bass * 0.4;
 
         // 3D orbit with tilt
         const ca = Math.cos(d.angle), sa = Math.sin(d.angle);
