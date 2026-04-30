@@ -486,36 +486,36 @@ float getDisplacement(vec3 pos, float t, float bass, float lowMid, float mid, fl
     float d = snoise(rp * 2.0 + t * 0.04) * 0.001;
 
     // === SPIKE LAYERS ===
-    // pow(max(noise, 0), N) creates thin conical spikes.
-    // Higher N = thinner. Higher freq = denser. Amplitudes scaled to r=0.25 sphere.
+    // pow(max(noise,0), N) creates thin conical spikes from smooth noise.
+    // Tuned for r=0.12 sphere: spikes extend 1-3x radius.
 
-    // Primary spikes (bass) — tallest, thin cones
-    float s1 = pow(max(snoise(rp * 4.0 + t * 0.06 + 10.0), 0.0), 5.0);
-    d += s1 * bass * 0.22;
+    // Tall primary spikes (bass)
+    float s1 = pow(max(snoise(rp * 3.5 + t * 0.06 + 10.0), 0.0), 4.0);
+    d += s1 * bass * 0.28;
 
-    // Secondary spikes (low-mid) — conical thorns
-    float s2 = pow(max(snoise(rp * 5.5 + t * 0.09 + 20.0), 0.0), 6.0);
-    d += s2 * lowMid * 0.18;
+    // Secondary spikes (low-mid)
+    float s2 = pow(max(snoise(rp * 5.0 + t * 0.08 + 20.0), 0.0), 4.5);
+    d += s2 * lowMid * 0.22;
 
-    // Dense spikes (mid) — sharp, many
-    float s3 = pow(max(snoise(rp * 7.5 + t * 0.12 + 30.0), 0.0), 6.0);
-    d += s3 * mid * 0.16;
+    // Dense spikes (mid) — many thin cones
+    float s3 = pow(max(snoise(rp * 7.0 + t * 0.11 + 30.0), 0.0), 5.0);
+    d += s3 * mid * 0.20;
 
-    // Extra spike field (mid+high-mid) — fills gaps
-    float s4 = pow(max(snoise(rp * 9.0 + t * 0.1 + 70.0), 0.0), 7.0);
-    d += s4 * (mid + highMid) * 0.06;
+    // Fill spikes (mid+high-mid)
+    float s4 = pow(max(snoise(rp * 9.0 + t * 0.1 + 70.0), 0.0), 5.5);
+    d += s4 * (mid + highMid) * 0.08;
 
-    // Thin thorns (high-mid) — spiny needles
-    float s5 = pow(max(snoise(rp * 12.0 + t * 0.16 + 40.0), 0.0), 8.0);
-    d += s5 * highMid * 0.12;
+    // Thin thorns (high-mid)
+    float s5 = pow(max(snoise(rp * 11.0 + t * 0.15 + 40.0), 0.0), 6.0);
+    d += s5 * highMid * 0.16;
 
-    // Fine needles (highs) — hair-thin
-    float s6 = pow(max(snoise(rp * 16.0 + t * 0.22 + 50.0), 0.0), 9.0);
-    d += s6 * high * 0.10;
+    // Fine needles (highs)
+    float s6 = pow(max(snoise(rp * 15.0 + t * 0.2 + 50.0), 0.0), 7.0);
+    d += s6 * high * 0.12;
 
-    // Splinters — ultra-fine texture
-    float s7 = pow(max(snoise(rp * 22.0 + t * 0.28 + 60.0), 0.0), 11.0);
-    d += s7 * high * 0.06;
+    // Splinters — ultra-fine
+    float s7 = pow(max(snoise(rp * 20.0 + t * 0.26 + 60.0), 0.0), 8.0);
+    d += s7 * high * 0.08;
 
     return d;
 }
@@ -644,7 +644,7 @@ const targetBg = new THREE.Color();
 const currentBg = new THREE.Color();
 
 // ---- FERROFLUID MESH ----
-const geo = new THREE.IcosahedronGeometry(0.25, 7);
+const geo = new THREE.IcosahedronGeometry(0.12, 7);
 
 const uniforms = {
     uTime:      { value: 0 },
@@ -722,7 +722,7 @@ for (let i = 0; i < SAT_COUNT; i++) {
     sat.userData = {
         angle: Math.random() * Math.PI * 2,
         speed: 0.15 + Math.random() * 0.4,
-        baseRadius: 0.27 + Math.random() * 0.05,
+        baseRadius: 0.14 + Math.random() * 0.04,
         tiltX: (Math.random() - 0.5) * Math.PI * 1.4,
         tiltZ: (Math.random() - 0.5) * Math.PI * 0.8,
         baseSize: 0.006 + Math.random() * 0.012,
@@ -736,7 +736,7 @@ for (let i = 0; i < SAT_COUNT; i++) {
 // ---- ORBIT CONTROLS ----
 const orbit = {
     rotX: 0.15, rotY: 0, targetRotX: 0.15, targetRotY: 0,
-    dist: 3.5, targetDist: 3.5,
+    dist: 2.5, targetDist: 2.5,
     dragging: false, dragStart: null, hasMoved: false,
     lastX: 0, lastY: 0, pinchDist: 0,
 
@@ -762,7 +762,7 @@ const orbit = {
     },
     zoom(delta) {
         this.targetDist += delta * 0.008;
-        this.targetDist = Math.max(2.5, Math.min(10, this.targetDist));
+        this.targetDist = Math.max(1.5, Math.min(8, this.targetDist));
     },
     update() {
         if (!this.dragging) this.targetRotY += 0.0015; // auto-rotate
